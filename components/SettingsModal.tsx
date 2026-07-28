@@ -1036,7 +1036,12 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                           ? avatar
                           : `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>${avatar}</text></svg>`)
                       }
+                      innerGradient="linear-gradient(145deg,#60496e8c 0%,#71C4FF44 100%)"
+                      behindGlowColor="rgba(125, 190, 255, 0.67)"
+                      behindGlowSize="50%"
+                      miniAvatarUrl={cardAvatarUrl || undefined}
                       contactText="Message"
+                      onContactClick={() => {}}
                     />
                   </div>
                 </div>
