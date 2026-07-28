@@ -227,6 +227,7 @@ import { AgentOrb } from './AgentOrb';
 import { getAgentAvatarStyle } from '@/lib/agent-avatar';
 import GridLoader from '@/components/ui/smoothui/grid-loader';
 import ShaderRevealTransition from '@/components/ui/smoothui/shader-reveal-transition';
+import { SwarmDagGraph } from './SwarmDagGraph';
 import { db, type AgentChatMessage } from '@/lib/db';
 
 interface AgentSwarmProps {
@@ -1463,6 +1464,19 @@ export function AgentSwarm({ onClose }: AgentSwarmProps) {
                   )}
                 </div>
               </div>
+
+                {/* Sub-Agent DAG Graph Visualization */}
+                <div className="p-4 border-b border-white/5 flex-shrink-0">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-white/50 flex items-center gap-1.5 font-mono">
+                      <span className="text-emerald-400">📊</span> Sub-Agent DAG Execution Flow
+                    </span>
+                    <span className="text-[10px] font-mono text-emerald-400/70 bg-emerald-400/10 px-2 py-0.5 rounded border border-emerald-400/20">
+                      {selectedAgent.max_agents} Worker Node{selectedAgent.max_agents > 1 ? 's' : ''} Active
+                    </span>
+                  </div>
+                  <SwarmDagGraph agent={selectedAgent} logLines={logLines} />
+                </div>
 
                 {/* Split View: Logs & Output */}
                 <div className="flex flex-1 min-h-0">
