@@ -76,8 +76,8 @@ class ChatContextMessage(BaseModel):
 
 class CreateAgentRequest(BaseModel):
     objective: str
-    model: str = "gpt-4o"          # any Hive-supported model
-    provider: str = "openai"       # openai | anthropic | google | groq
+    model: str = "z-ai/glm-5.2"       # any Hive-supported model
+    provider: str = "nvidia"           # nvidia | groq
     max_agents: int = 3
     human_in_loop: bool = True
     chat_history: list[ChatContextMessage] = Field(default_factory=list)
@@ -339,6 +339,28 @@ async def _call_google(model: str, objective: str, chat_history: list[ChatContex
     return response.text or "(No response generated)"
 
 
+async def _call_nvidia(model: str, objective: str, chat_history: list[ChatContextMessage]) -> str:
+    """Call NVIDIA NIM API (OpenAI-compatible) and return the response text."""
+    from openai import AsyncOpenAI
+    client = AsyncOpenAI(
+        base_url="https://integrate.api.nvidia.com/v1",
+        api_key=os.environ.get("NVIDIA_API_KEY", "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"),
+    )
+    response = await client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": _build_system_prompt()},
+            *_normalise_chat_history(chat_history),
+            {"role": "user", "content": objective},
+        ],
+        temperature=1,
+        top_p=1,
+        max_tokens=16384,
+        seed=42,
+    )
+    return response.choices[0].message.content or "(No response generated)"
+
+
 # ---------------------------------------------------------------------------
 # Background task: real LLM-powered agent run
 # ---------------------------------------------------------------------------
@@ -399,6 +421,8 @@ async def _run_hive_agent(agent_id: str, request: CreateAgentRequest) -> None:
         provider = request.provider.lower()
         if provider == "groq":
             result_text = await _call_groq(request.model, request.objective, request.chat_history)
+        elif provider == "nvidia":
+            result_text = await _call_nvidia(request.model, request.objective, request.chat_history)
         elif provider == "openai":
             result_text = await _call_openai(request.model, request.objective, request.chat_history)
         elif provider == "anthropic":

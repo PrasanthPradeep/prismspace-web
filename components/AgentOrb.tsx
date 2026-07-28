@@ -7,23 +7,11 @@ export const PROVIDER_ORB_COLORS: Record<
   string,
   { bg: string; c1: string; c2: string; c3: string }
 > = {
-  openai: {
-    bg: 'oklch(15% 0.04 160)',
-    c1: 'oklch(75% 0.18 160)', // ChatGPT Emerald
-    c2: 'oklch(80% 0.15 180)', // Teal
-    c3: 'oklch(70% 0.16 140)', // Mint
-  },
-  anthropic: {
-    bg: 'oklch(15% 0.04 35)',
-    c1: 'oklch(75% 0.22 45)',  // Claude Amber
-    c2: 'oklch(70% 0.20 25)',  // Terracotta
-    c3: 'oklch(80% 0.16 65)',  // Gold
-  },
-  google: {
-    bg: 'oklch(15% 0.04 250)',
-    c1: 'oklch(70% 0.24 250)', // Gemini Blue
-    c2: 'oklch(75% 0.22 200)', // Cyan
-    c3: 'oklch(72% 0.22 300)', // Purple
+  nvidia: {
+    bg: 'oklch(12% 0.05 140)',
+    c1: 'oklch(76% 0.28 140)', // NVIDIA green
+    c2: 'oklch(72% 0.22 100)', // Lime
+    c3: 'oklch(68% 0.20 180)', // Teal
   },
   groq: {
     bg: 'oklch(15% 0.05 25)',

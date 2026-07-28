@@ -123,6 +123,7 @@ import { AgentCard } from './AgentCard';
 import { AgentOrb } from './AgentOrb';
 import { getAgentAvatarStyle } from '@/lib/agent-avatar';
 import GridLoader from '@/components/ui/smoothui/grid-loader';
+import ShaderRevealTransition from '@/components/ui/smoothui/shader-reveal-transition';
 import { db, type AgentChatMessage } from '@/lib/db';
 
 interface AgentSwarmProps {
@@ -130,9 +131,7 @@ interface AgentSwarmProps {
 }
 
 const MODELS: Record<ModelProvider, string[]> = {
-  openai: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'],
-  anthropic: ['claude-opus-4-5', 'claude-sonnet-4-5', 'claude-haiku-3-5'],
-  google: ['gemini-2.5-pro', 'gemini-2.5-flash'],
+  nvidia: ['z-ai/glm-5.2'],
   groq: ['llama-3.3-70b-versatile', 'llama3-70b-8192', 'mixtral-8x7b-32768'],
 };
 
@@ -176,8 +175,8 @@ export function AgentSwarm({ onClose }: AgentSwarmProps) {
 
   // New agent form
   const [objective, setObjective] = useState('');
-  const [provider, setProvider] = useState<ModelProvider>('groq');
-  const [model, setModel] = useState(MODELS.groq[0]);
+  const [provider, setProvider] = useState<ModelProvider>('nvidia');
+  const [model, setModel] = useState(MODELS.nvidia[0]);
   const [maxAgents, setMaxAgents] = useState(3);
   const [hitl, setHitl] = useState(true);
   const [launching, setLaunching] = useState(false);
@@ -742,9 +741,7 @@ export function AgentSwarm({ onClose }: AgentSwarmProps) {
                 value={provider}
                 onChange={(val) => handleProviderChange(val as ModelProvider)}
                 options={[
-                  { value: 'openai', label: <div className="flex items-center gap-2"><AgentOrb provider="openai" size="18px" /><span>OpenAI</span></div> },
-                  { value: 'anthropic', label: <div className="flex items-center gap-2"><AgentOrb provider="anthropic" size="18px" /><span>Anthropic</span></div> },
-                  { value: 'google', label: <div className="flex items-center gap-2"><AgentOrb provider="google" size="18px" /><span>Google</span></div> },
+                  { value: 'nvidia', label: <div className="flex items-center gap-2"><AgentOrb provider="nvidia" size="18px" /><span>NVIDIA NIM</span></div> },
                   { value: 'groq', label: <div className="flex items-center gap-2"><AgentOrb provider="groq" size="18px" /><span>Groq</span></div> },
                 ]}
               />
@@ -1274,53 +1271,61 @@ export function AgentSwarm({ onClose }: AgentSwarmProps) {
                       // Determine which sub-agent spoke most recently in the logs
                       const lastLine = logLines[logLines.length - 1] ?? '';
                       const activeAgent = subAgents.find(name => lastLine.includes(name));
+                      const isAgentRunning = ['initialising', 'planning', 'running'].includes(selectedAgent.status);
 
                       return (
-                        <div className="flex items-center gap-2 mt-3">
-                          {subAgents.map(name => {
-                            const isActive = name === activeAgent;
-                            return (
-                              <div
-                                key={name}
-                                title={name}
-                                style={{
-                                  display: 'flex',
-                                  flexDirection: 'column',
-                                  alignItems: 'center',
-                                  gap: 4,
-                                }}
-                              >
+                        <ShaderRevealTransition
+                          variant="zoom"
+                          transitionKey={`${selectedAgent.id}-${isAgentRunning ? 'running' : 'idle'}`}
+                          duration={850}
+                          className="mt-3 p-1 rounded-xl"
+                        >
+                          <div className="flex items-center gap-2">
+                            {subAgents.map(name => {
+                              const isActive = name === activeAgent;
+                              return (
                                 <div
+                                  key={name}
+                                  title={name}
                                   style={{
-                                    borderRadius: '50%',
-                                    padding: '2px',
-                                    border: isActive
-                                      ? '2px solid #00ff88'
-                                      : '2px solid rgba(255,255,255,0.1)',
-                                    boxShadow: isActive
-                                      ? '0 0 12px rgba(0,255,136,0.5)'
-                                      : 'none',
-                                    transition: 'all 0.3s ease',
-                                    opacity: isActive ? 1 : 0.5,
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    gap: 4,
                                   }}
                                 >
-                                  <AgentOrb seed={name} size="40px" />
+                                  <div
+                                    style={{
+                                      borderRadius: '50%',
+                                      padding: '2px',
+                                      border: isActive
+                                        ? '2px solid #00ff88'
+                                        : '2px solid rgba(255,255,255,0.1)',
+                                      boxShadow: isActive
+                                        ? '0 0 12px rgba(0,255,136,0.5)'
+                                        : 'none',
+                                      transition: 'all 0.3s ease',
+                                      opacity: isActive ? 1 : 0.5,
+                                    }}
+                                  >
+                                    <AgentOrb seed={name} size="40px" />
+                                  </div>
+                                  <span
+                                    style={{
+                                      fontSize: 9,
+                                      fontFamily: 'monospace',
+                                      color: isActive ? '#00ff88' : 'rgba(255,255,255,0.3)',
+                                      fontWeight: isActive ? 700 : 400,
+                                      transition: 'color 0.3s',
+                                    }}
+                                  >
+                                    {name}
+                                  </span>
                                 </div>
-                                <span
-                                  style={{
-                                    fontSize: 9,
-                                    fontFamily: 'monospace',
-                                    color: isActive ? '#00ff88' : 'rgba(255,255,255,0.3)',
-                                    fontWeight: isActive ? 700 : 400,
-                                    transition: 'color 0.3s',
-                                  }}
-                                >
-                                  {name}
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
+                              );
+                            })}
+                          </div>
+                        </ShaderRevealTransition>
                       );
                     })()}
                   </div>

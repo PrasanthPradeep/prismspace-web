@@ -14,7 +14,7 @@ export type AgentStatus =
   | 'failed'
   | 'cancelled';
 
-export type ModelProvider = 'openai' | 'anthropic' | 'google' | 'groq';
+export type ModelProvider = 'groq' | 'nvidia';
 
 export interface SwarmAgent {
   id: string;

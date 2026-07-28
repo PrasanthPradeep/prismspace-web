@@ -82,14 +82,14 @@ void main(){
     glow = exp(-pow(uv.x + n1 * 0.26 - progress, 2.0) * 26.0);
     color = mix(vec3(1.0, 0.10, 0.55), vec3(0.18, 1.0, 0.78), n1);
   } else if (uVariant < 1.5) {
-    // Demo 2 — zoom mix. Large central lens, not a sweep.
-    float yGate = smoothstep(0.0, 1.0, progress * 2.15 + uv.y - 1.08);
-    vec2 z = (uv - 0.5) * mix(1.75, 0.35, yGate) + 0.5;
-    float lens = 1.0 - smoothstep(0.12, 0.78, length((z - 0.5) * aspect));
-    float seam = exp(-pow(yGate - 0.5, 2.0) * 20.0);
-    mask = (lens * 0.72 + seam * 0.42) * parabola(progress, 0.42);
-    glow = seam * 0.9 + lens * 0.25;
-    color = mix(vec3(1.0, 0.80, 0.34), vec3(0.70, 0.92, 1.0), yGate);
+    // Zoom reveal mix — subtle central lens zoom transition
+    float yGate = smoothstep(0.0, 1.0, progress * 1.8 + uv.y - 0.9);
+    vec2 z = (uv - 0.5) * mix(1.35, 0.65, yGate) + 0.5;
+    float lens = 1.0 - smoothstep(0.1, 0.85, length((z - 0.5) * aspect));
+    float seam = exp(-pow(yGate - 0.5, 2.0) * 16.0);
+    mask = (lens * 0.38 + seam * 0.22) * parabola(progress, 0.5);
+    glow = seam * 0.4 + lens * 0.12;
+    color = mix(vec3(0.0, 1.0, 0.53), vec3(0.12, 0.86, 1.0), yGate);
   } else if (uVariant < 2.5) {
     // Demo 3 — noisy circular reveal.
     float n = noise(uv * 9.0 + uTime * 0.25);
@@ -434,7 +434,7 @@ const ShaderRevealTransition = ({
   return (
     <div
       className={cn(
-        "relative isolate overflow-hidden rounded-2xl bg-background text-foreground",
+        "relative isolate overflow-hidden rounded-2xl bg-transparent text-inherit",
         className
       )}
       data-transitioning={isActive ? "true" : "false"}
