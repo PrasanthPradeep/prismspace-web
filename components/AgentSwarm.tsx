@@ -120,6 +120,7 @@ import {
 import { Toaster } from 'react-hot-toast';
 import toast from 'react-hot-toast';
 import { AgentCard } from './AgentCard';
+import { AgentOrb } from './AgentOrb';
 import { getAgentAvatarStyle } from '@/lib/agent-avatar';
 import GridLoader from '@/components/ui/smoothui/grid-loader';
 import { db, type AgentChatMessage } from '@/lib/db';
@@ -741,10 +742,10 @@ export function AgentSwarm({ onClose }: AgentSwarmProps) {
                 value={provider}
                 onChange={(val) => handleProviderChange(val as ModelProvider)}
                 options={[
-                  { value: 'openai', label: 'OpenAI' },
-                  { value: 'anthropic', label: 'Anthropic' },
-                  { value: 'google', label: 'Google' },
-                  { value: 'groq', label: 'Groq' },
+                  { value: 'openai', label: <div className="flex items-center gap-2"><AgentOrb provider="openai" size="18px" /><span>OpenAI</span></div> },
+                  { value: 'anthropic', label: <div className="flex items-center gap-2"><AgentOrb provider="anthropic" size="18px" /><span>Anthropic</span></div> },
+                  { value: 'google', label: <div className="flex items-center gap-2"><AgentOrb provider="google" size="18px" /><span>Google</span></div> },
+                  { value: 'groq', label: <div className="flex items-center gap-2"><AgentOrb provider="groq" size="18px" /><span>Groq</span></div> },
                 ]}
               />
               <StyledSelect
@@ -755,32 +756,32 @@ export function AgentSwarm({ onClose }: AgentSwarmProps) {
               />
             </div>
 
-            {/* Sub-agents + HITL */}
-            <div className="flex items-center gap-3">
-              <label className="flex items-center gap-1.5 text-xs text-white/60">
-                <span>Agents:</span>
+            {/* Sub-agents slider + Approval */}
+            <div className="flex items-center justify-between gap-3 py-1">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-xs font-medium text-white/70 whitespace-nowrap">Agents:</span>
                 <input
-                  type="number"
+                  type="range"
                   min={1}
-                  max={10}
-                  value={maxAgents}
+                  max={3}
+                  step={1}
+                  value={Math.min(3, Math.max(1, maxAgents))}
                   onChange={(e) => setMaxAgents(Number(e.target.value))}
-                  className="w-12 rounded px-1.5 py-1 text-xs text-white outline-none text-center"
-                  style={{
-                    background: 'rgba(255,255,255,0.07)',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                  }}
+                  className="w-24 accent-emerald-400 h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer flex-shrink-0"
                 />
-              </label>
+                <span className="text-xs font-mono font-semibold text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 px-2 py-0.5 rounded min-w-[20px] text-center flex-shrink-0">
+                  {Math.min(3, Math.max(1, maxAgents))}
+                </span>
+              </div>
 
-              <label className="flex items-center gap-1.5 text-xs text-white/60 cursor-pointer ml-auto">
+              <label className="flex items-center gap-1.5 text-xs text-white/80 cursor-pointer select-none whitespace-nowrap flex-shrink-0">
                 <input
                   type="checkbox"
                   checked={hitl}
                   onChange={(e) => setHitl(e.target.checked)}
-                  className="accent-green-400"
+                  className="w-4 h-4 accent-emerald-400 rounded cursor-pointer"
                 />
-                <span>HITL</span>
+                <span className="font-medium">Approval</span>
               </label>
             </div>
 
@@ -1196,15 +1197,6 @@ export function AgentSwarm({ onClose }: AgentSwarmProps) {
 
           {/* Agent list */}
           <div className="flex-1 overflow-y-auto p-3 space-y-2">
-            {agents.length === 0 && (
-              <div className="text-center py-8">
-                <p className="text-3xl mb-2">🐝</p>
-                <p className="text-white/30 text-xs">No agents yet.</p>
-                <p className="text-white/20 text-xs mt-1">
-                  Launch a swarm above to get started.
-                </p>
-              </div>
-            )}
             {agents.map((agent) => (
               <AgentCard
                 key={agent.id}
@@ -1268,7 +1260,7 @@ export function AgentSwarm({ onClose }: AgentSwarmProps) {
                             border: '1px solid rgba(251,191,36,0.3)',
                           }}
                         >
-                          HITL
+                          Approval
                         </span>
                       )}
                     </div>
@@ -1300,19 +1292,20 @@ export function AgentSwarm({ onClose }: AgentSwarmProps) {
                               >
                                 <div
                                   style={{
-                                    ...getAgentAvatarStyle(name, 44),
+                                    borderRadius: '50%',
+                                    padding: '2px',
                                     border: isActive
                                       ? '2px solid #00ff88'
-                                      : '2px solid rgba(255,255,255,0.08)',
+                                      : '2px solid rgba(255,255,255,0.1)',
                                     boxShadow: isActive
-                                      ? '0 0 10px rgba(0,255,136,0.4)'
+                                      ? '0 0 12px rgba(0,255,136,0.5)'
                                       : 'none',
-                                    transition: 'border-color 0.3s, box-shadow 0.3s',
+                                    transition: 'all 0.3s ease',
                                     opacity: isActive ? 1 : 0.5,
-                                    overflow: 'hidden',
-                                    backgroundSize: `${13 * 100}% ${7 * 100}%`,
                                   }}
-                                />
+                                >
+                                  <AgentOrb seed={name} size="40px" />
+                                </div>
                                 <span
                                   style={{
                                     fontSize: 9,

@@ -125,6 +125,20 @@ interface PanelManagerProps {
 }
 
 export function PanelManager({ activePanel, onClose }: PanelManagerProps) {
+  const [opacity, setOpacity] = useState(100);
+
+  useEffect(() => {
+    const loadOpacity = () => {
+      const saved = localStorage.getItem('devtools_opacity');
+      if (saved !== null) {
+        setOpacity(Math.max(10, Math.min(100, Number(saved))));
+      }
+    };
+    loadOpacity();
+    window.addEventListener('prism:devtools-opacity-change', loadOpacity);
+    return () => window.removeEventListener('prism:devtools-opacity-change', loadOpacity);
+  }, []);
+
   if (!activePanel) return null;
 
   const config = panelConfigs[activePanel];
@@ -146,13 +160,17 @@ export function PanelManager({ activePanel, onClose }: PanelManagerProps) {
     <>
       {/* Overlay */}
       <div
-        className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[1000] transition-opacity duration-300"
+        className="fixed inset-0 z-[1000] transition-all duration-300"
+        style={{
+          backgroundColor: `rgba(0, 0, 0, ${0.5 * (opacity / 100)})`,
+          backdropFilter: opacity < 100 ? `blur(${Math.round(4 * (opacity / 100))}px)` : undefined,
+        }}
         onClick={onClose}
       />
 
       {/* Panel */}
       <div
-        className={`fixed top-0 h-screen bg-[#0a0a0a] border-white/15 z-[1001] 
+        className={`fixed top-0 h-screen border-white/15 z-[1001] 
                     shadow-[4px_0_30px_rgba(0,0,0,0.8)] transition-all duration-300
                     ${positionClasses[config.position]}
                     ${animationClasses[config.position]}
@@ -163,6 +181,9 @@ export function PanelManager({ activePanel, onClose }: PanelManagerProps) {
           width: config.position === 'full' ? '100%' : config.width,
           maxWidth: config.position === 'full' ? '90vw' : undefined,
           overflowX: 'hidden',
+          backgroundColor: `rgba(10, 10, 10, ${opacity / 100})`,
+          backdropFilter: `blur(${Math.round(16 * (opacity / 100))}px)`,
+          opacity: Math.max(0.1, opacity / 100),
         }}
         onClick={(e) => e.stopPropagation()}
       >

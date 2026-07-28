@@ -17,6 +17,8 @@ import {
   deleteAgent,
 } from '@/lib/agent-swarm-client';
 
+import { AgentOrb } from '@/components/AgentOrb';
+
 interface AgentCardProps {
   agent: SwarmAgent;
   isSelected: boolean;
@@ -135,17 +137,20 @@ export function AgentCard({ agent, isSelected, onSelect, onRefresh }: AgentCardP
       )}
 
       {/* Header row */}
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <div className="flex-1 min-w-0">
-          <p
-            className="text-white text-sm font-medium truncate"
-            title={agent.objective}
-          >
-            {agent.objective}
-          </p>
-          <p className="text-white/40 text-xs mt-0.5 font-mono">
-            {agent.id.slice(0, 8)}… · {elapsedStr}
-          </p>
+      <div className="flex items-start justify-between gap-3 mb-2">
+        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+          <AgentOrb provider={agent.provider} seed={agent.id} size="28px" className="flex-shrink-0" />
+          <div className="min-w-0 flex-1">
+            <p
+              className="text-white text-sm font-medium truncate"
+              title={agent.objective}
+            >
+              {agent.objective}
+            </p>
+            <p className="text-white/40 text-xs mt-0.5 font-mono">
+              {agent.id.slice(0, 8)}… · {elapsedStr}
+            </p>
+          </div>
         </div>
 
         {/* Delete button (terminal states) */}

@@ -1,5 +1,4 @@
-'use client';
-
+import { useState, useEffect } from 'react';
 import CardFlip from './kokonutui/card-flip';
 
 interface Tool {
@@ -118,6 +117,20 @@ interface DevSpaceProps {
 }
 
 export function DevSpace({ onToolAction }: DevSpaceProps) {
+  const [opacity, setOpacity] = useState(100);
+
+  useEffect(() => {
+    const loadOpacity = () => {
+      const saved = localStorage.getItem('devtools_opacity');
+      if (saved !== null) {
+        setOpacity(Math.max(0, Math.min(100, Number(saved))));
+      }
+    };
+    loadOpacity();
+    window.addEventListener('prism:devtools-opacity-change', loadOpacity);
+    return () => window.removeEventListener('prism:devtools-opacity-change', loadOpacity);
+  }, []);
+
   const handleCardClick = (tool: Tool) => {
     if (tool.href) {
       window.open(tool.href, '_blank');
@@ -126,10 +139,13 @@ export function DevSpace({ onToolAction }: DevSpaceProps) {
     }
   };
 
+  const alpha = opacity / 100;
+
   return (
-    <div className="min-h-screen py-[60px] px-[40px] flex flex-col items-center justify-start relative z-[2]"
+    <div className="min-h-screen py-[60px] px-[40px] flex flex-col items-center justify-start relative z-[2] transition-all duration-300"
       style={{
-        background: 'linear-gradient(180deg, rgba(0, 0, 0, 0.4) 0%, rgba(0, 0, 0, 0.6) 50%, rgba(0, 0, 0, 0.4) 100%)',
+        background: `linear-gradient(180deg, rgba(0, 0, 0, ${0.4 * alpha}) 0%, rgba(0, 0, 0, ${0.6 * alpha}) 50%, rgba(0, 0, 0, ${0.4 * alpha}) 100%)`,
+        backdropFilter: alpha < 0.99 ? `blur(${Math.round(12 * alpha)}px)` : undefined,
         marginTop: '-100vh',
         transform: 'translateY(100vh)'
       }}>

@@ -40,12 +40,18 @@ function getLegacyBackgroundSetting(value: string | null): StoredBackgroundSetti
 export function BackgroundManager() {
   const [bgType, setBgType] = useState<BackgroundMediaType | null>(null);
   const [bgUrl, setBgUrl] = useState<string>('');
+  const [opacity, setOpacity] = useState<number>(100);
 
   useEffect(() => {
     let blobUrl: string | null = null;
 
     const loadBackground = async () => {
       try {
+        const savedOpacity = localStorage.getItem('wallpaper_opacity');
+        if (savedOpacity !== null) {
+          setOpacity(Math.max(0, Math.min(100, Number(savedOpacity))));
+        }
+
         const savedSetting = await db.settings.get(BACKGROUND_SETTING_KEY);
         const backgroundSetting = savedSetting
           ? (JSON.parse(savedSetting.value) as StoredBackgroundSetting)
@@ -100,7 +106,12 @@ export function BackgroundManager() {
   return (
     <div className="fixed inset-0 z-[-1] overflow-hidden pointer-events-none bg-black">
       {bgType === 'image' && (
-        <img src={bgUrl} alt="Background" className="w-full h-full object-cover" />
+        <img
+          src={bgUrl}
+          alt="Background"
+          className="w-full h-full object-cover transition-opacity duration-150"
+          style={{ opacity: opacity / 100 }}
+        />
       )}
       {bgType === 'video' && (
         <video 
@@ -109,7 +120,8 @@ export function BackgroundManager() {
           loop 
           muted 
           playsInline 
-          className="w-full h-full object-cover" 
+          className="w-full h-full object-cover transition-opacity duration-150"
+          style={{ opacity: opacity / 100 }}
         />
       )}
     </div>

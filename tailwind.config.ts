@@ -22,9 +22,10 @@ export default {
         gennaro: ['GENNARO', 'sans-serif'],
         ammonite: ['Ammonite', 'serif'],
         crude: ['Crude', 'sans-serif'],
-        ghetto: ['Ghetto', 'sans-serif'],
         zombiess: ['ZombiessDemoFont', 'monospace'],
         permanentMarker: ['Permanent Marker', 'cursive'],
+        xolonium: ['Xolonium', 'sans-serif'],
+        nemoy: ['Nemoy', 'sans-serif'],
       },
       colors: {
         background: "var(--background)",

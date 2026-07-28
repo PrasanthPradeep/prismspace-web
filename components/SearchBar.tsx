@@ -14,6 +14,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { AgentOrb } from './AgentOrb';
 
 // ── Search engine definitions ─────────────────────────────────────────────────
 
@@ -338,8 +339,8 @@ export function SearchBar({ onAgentSubmit }: SearchBarProps) {
             )}
           </div>
         ) : (
-          <div className="flex items-center px-4 py-3.5 flex-shrink-0" style={{ borderRight: '1px solid rgba(0,255,136,0.15)' }}>
-            <AgentIcon />
+          <div className="flex items-center px-3.5 py-3 flex-shrink-0" style={{ borderRight: '1px solid rgba(0,255,136,0.15)' }}>
+            <AgentOrb size="24px" provider="groq" />
           </div>
         )}
 

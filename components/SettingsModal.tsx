@@ -6,6 +6,7 @@ import { ClockStyle } from './Clock';
 import { ClockPreview } from './ClockPreview';
 import { AvatarPicker } from './AvatarPicker';
 import { AppleSwitch } from '@/components/unlumen-ui/apple-switch';
+import ExposureSlider from '@/components/ui/smoothui/exposure-slider';
 import { db, UserProfile } from '@/lib/db';
 import ProfileCard from './ProfileCard';
 
@@ -43,8 +44,9 @@ const clockStyles: { name: string; value: ClockStyle }[] = [
   { name: 'Westiva', value: 'westiva' },
   { name: 'Ammonite', value: 'ammonite' },
   { name: 'Crude', value: 'crude' },
-  { name: 'Ghetto', value: 'ghetto' },
   { name: 'Zombiess', value: 'zombiess' },
+  { name: 'Xolonium', value: 'xolonium' },
+  { name: 'Nemoy', value: 'nemoy' },
 ];
 
 const backgrounds: BackgroundChoice[] = [
@@ -101,6 +103,11 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   const [dynamicGreetings, setDynamicGreetings] = useState(true);
   const [showGreetings, setShowGreetings] = useState(true);
   const [matrixDisplay, setMatrixDisplay] = useState(true);
+  const [dynamicIsland, setDynamicIsland] = useState(true);
+  const [dynamicIslandSeconds, setDynamicIslandSeconds] = useState(false);
+  const [dynamicIslandExpand, setDynamicIslandExpand] = useState(true);
+  const [wallpaperOpacity, setWallpaperOpacity] = useState(100);
+  const [devtoolsOpacity, setDevtoolsOpacity] = useState(100);
   
   // Profile states
   const [username, setUsername] = useState('User');
@@ -136,6 +143,17 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
     setDynamicGreetings(savedDynamicGreetings);
     setShowGreetings(savedShowGreetings);
     setMatrixDisplay(savedMatrixDisplay);
+    setDynamicIsland(localStorage.getItem('dynamicIsland') !== 'false');
+    setDynamicIslandSeconds(localStorage.getItem('dynamicIslandSeconds') === 'true');
+    setDynamicIslandExpand(localStorage.getItem('dynamicIslandExpand') !== 'false');
+    const savedOpacity = localStorage.getItem('wallpaper_opacity');
+    if (savedOpacity !== null) {
+      setWallpaperOpacity(Math.max(0, Math.min(100, Number(savedOpacity))));
+    }
+    const savedDevtoolsOpacity = localStorage.getItem('devtools_opacity');
+    if (savedDevtoolsOpacity !== null) {
+      setDevtoolsOpacity(Math.max(10, Math.min(100, Number(savedDevtoolsOpacity))));
+    }
 
     // Load user profile
     const loadProfile = async () => {
@@ -235,6 +253,18 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   const clearColorHistory = () => {
     setColorHistory([]);
     localStorage.removeItem('colorHistory');
+  };
+
+  const handleWallpaperOpacityChange = (val: number) => {
+    setWallpaperOpacity(val);
+    localStorage.setItem('wallpaper_opacity', val.toString());
+    window.dispatchEvent(new CustomEvent('prism:background-change'));
+  };
+
+  const handleDevtoolsOpacityChange = (val: number) => {
+    setDevtoolsOpacity(val);
+    localStorage.setItem('devtools_opacity', val.toString());
+    window.dispatchEvent(new CustomEvent('prism:devtools-opacity-change'));
   };
 
   const handleBackgroundChange = async (bgPath: string) => {
@@ -619,6 +649,54 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                     </button>
                   ))}
                 </div>
+
+                {/* Wallpaper Opacity / Exposure Slider */}
+                <div className="mt-8 p-6 bg-white/5 rounded-2xl border border-white/10">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="text-base font-semibold text-white">Wallpaper Transparency / Exposure</h3>
+                      <p className="text-xs text-white/60">Drag ticker to adjust background transparency live</p>
+                    </div>
+                    <span className="text-sm font-mono font-semibold px-3 py-1 bg-white/10 rounded-lg text-pink-400">
+                      {wallpaperOpacity}%
+                    </span>
+                  </div>
+                  <div className="flex justify-center py-2 overflow-x-hidden">
+                    <ExposureSlider
+                      min={0}
+                      max={100}
+                      step={5}
+                      value={wallpaperOpacity}
+                      onChange={handleWallpaperOpacityChange}
+                      accentColor="#ec4899"
+                      showIndicator={true}
+                    />
+                  </div>
+                </div>
+
+                {/* DevTools Opacity / Exposure Slider */}
+                <div className="mt-4 p-6 bg-white/5 rounded-2xl border border-white/10">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="text-base font-semibold text-white">DevTools Transparency / Exposure</h3>
+                      <p className="text-xs text-white/60">Drag ticker to adjust DevTools panel transparency live</p>
+                    </div>
+                    <span className="text-sm font-mono font-semibold px-3 py-1 bg-white/10 rounded-lg text-emerald-400">
+                      {devtoolsOpacity}%
+                    </span>
+                  </div>
+                  <div className="flex justify-center py-2 overflow-x-hidden">
+                    <ExposureSlider
+                      min={10}
+                      max={100}
+                      step={5}
+                      value={devtoolsOpacity}
+                      onChange={handleDevtoolsOpacityChange}
+                      accentColor="#10b981"
+                      showIndicator={true}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -685,6 +763,62 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                   size="sm"
                   aria-label="Matrix Display"
                 />
+              </div>
+
+              <div className="mt-6">
+                <h3 className="text-base font-semibold mb-4 text-white/70 uppercase tracking-widest text-xs">Dynamic Island</h3>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl">
+                    <div>
+                      <div className="font-medium mb-1">Enable Dynamic Island</div>
+                      <div className="text-sm text-white/60">Show the floating time pill at the top of the screen.</div>
+                    </div>
+                    <AppleSwitch
+                      checked={dynamicIsland}
+                      onCheckedChange={(checked) => {
+                        setDynamicIsland(checked);
+                        localStorage.setItem('dynamicIsland', checked.toString());
+                        window.dispatchEvent(new CustomEvent('prism:island-settings'));
+                      }}
+                      size="sm"
+                      aria-label="Enable Dynamic Island"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl">
+                    <div>
+                      <div className="font-medium mb-1">Show seconds</div>
+                      <div className="text-sm text-white/60">Display seconds in the collapsed time pill.</div>
+                    </div>
+                    <AppleSwitch
+                      checked={dynamicIslandSeconds}
+                      onCheckedChange={(checked) => {
+                        setDynamicIslandSeconds(checked);
+                        localStorage.setItem('dynamicIslandSeconds', checked.toString());
+                        window.dispatchEvent(new CustomEvent('prism:island-settings'));
+                      }}
+                      size="sm"
+                      aria-label="Show seconds in Dynamic Island"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl">
+                    <div>
+                      <div className="font-medium mb-1">Auto-expand on events</div>
+                      <div className="text-sm text-white/60">Expand the island when app notifications arrive.</div>
+                    </div>
+                    <AppleSwitch
+                      checked={dynamicIslandExpand}
+                      onCheckedChange={(checked) => {
+                        setDynamicIslandExpand(checked);
+                        localStorage.setItem('dynamicIslandExpand', checked.toString());
+                        window.dispatchEvent(new CustomEvent('prism:island-settings'));
+                      }}
+                      size="sm"
+                      aria-label="Auto-expand Dynamic Island on events"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           )}
