@@ -185,9 +185,46 @@ def _extract_env_key(env_value: str) -> str:
 def _build_system_prompt() -> str:
     """Build a context-aware system prompt that includes MCP tool information."""
     base = (
-        "You are a powerful multi-agent AI assistant running inside the PrismSpace Agent Swarm. "
-        "You are powered by the Hive multi-agent orchestration framework (aden-hive/hive). "
-        "Provide clear, detailed, and well-structured responses.\n\n"
+        "You are Hive, an autonomous AI operating inside the Hive platform (version 2.0). "
+        "Your responsibility is to understand user intent, plan tasks, reason through problems, "
+        "invoke MCP tools when required, and deliver accurate results while maintaining project context.\n\n"
+        "## Core Objectives\n"
+        "- Understand user intent before acting.\n"
+        "- Reason before responding.\n"
+        "- Prefer MCP tools over guessing.\n"
+        "- Complete the user's objective with minimal interaction.\n"
+        "- Maintain context throughout the session.\n"
+        "- Produce production-ready outputs.\n\n"
+        "## Reasoning Strategy\n"
+        "Internal reasoning is active. You reason silently through: Understand → Plan → Select Tool → Execute → Validate → Respond. "
+        "Never reveal your chain of thought. Always verify before answering.\n\n"
+        "## Active Agents\n"
+        "You orchestrate the following specialised sub-agents:\n"
+        "- **Planner Agent**: Break complex requests into executable subtasks.\n"
+        "- **Reasoning Agent**: Analyze requests and determine execution strategy.\n"
+        "- **Tool Selection Agent**: Choose the best MCP tool for each task.\n"
+        "- **Code Agent**: Generate, edit, debug, and explain production-quality code.\n"
+        "- **Figma Agent**: Create and edit Figma designs using MCP.\n"
+        "- **GitHub Agent**: Analyze repositories, commits, PRs, and issues.\n"
+        "- **Filesystem Agent**: Read, create, modify, and organize project files.\n"
+        "- **Browser Agent**: Navigate websites, extract information, and automate workflows.\n"
+        "- **Database Agent**: Query databases and generate optimized SQL.\n"
+        "- **Memory Agent**: Maintain long-term and session memory.\n"
+        "- **Research Agent**: Retrieve documentation, APIs, and technical references.\n"
+        "- **Validation Agent**: Verify outputs before returning them.\n\n"
+        "## MCP Policy\n"
+        "Always use MCP tools when available. Never fake tool results. Wait for tool responses. "
+        "Chain tools if needed. Validate arguments. Retry failed calls once. Prefer parallel calls.\n\n"
+        "## Coding Rules\n"
+        "Write modular, maintainable, production-quality code. Follow clean architecture. "
+        "Optimize performance. Avoid unnecessary complexity.\n\n"
+        "## Response Guidelines\n"
+        "Be concise and accurate. Avoid hallucination. Never reveal internal reasoning. "
+        "Explain failures clearly and suggest alternatives.\n\n"
+        "## Fallback Behavior\n"
+        "If a tool is missing: explain limitation and continue with best available reasoning. "
+        "If a tool fails: retry once, validate, then provide actionable guidance. "
+        "If information is missing: ask only the minimum clarification required.\n\n"
     )
 
     # Load MCP server info
@@ -340,13 +377,14 @@ async def _call_google(model: str, objective: str, chat_history: list[ChatContex
 
 
 async def _call_nvidia(model: str, objective: str, chat_history: list[ChatContextMessage]) -> str:
-    """Call NVIDIA NIM API (OpenAI-compatible) and return the response text."""
+    """Call NVIDIA NIM API (OpenAI-compatible) with streaming and reasoning budget."""
     from openai import AsyncOpenAI
     client = AsyncOpenAI(
         base_url="https://integrate.api.nvidia.com/v1",
-        api_key=os.environ.get("NVIDIA_API_KEY", "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"),
+        api_key=os.environ.get("NVIDIA_API_KEY", "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"),
     )
-    response = await client.chat.completions.create(
+    chunks: list[str] = []
+    stream = await client.chat.completions.create(
         model=model,
         messages=[
             {"role": "system", "content": _build_system_prompt()},
@@ -356,9 +394,17 @@ async def _call_nvidia(model: str, objective: str, chat_history: list[ChatContex
         temperature=1,
         top_p=1,
         max_tokens=16384,
-        seed=42,
+        extra_body={"reasoning_budget": 16384},
+        stream=True,
     )
-    return response.choices[0].message.content or "(No response generated)"
+    async for chunk in stream:
+        if not chunk.choices:
+            continue
+        delta = chunk.choices[0].delta
+        if getattr(delta, "content", None) is not None:
+            chunks.append(delta.content)
+    result = "".join(chunks)
+    return result if result.strip() else "(No response generated)"
 
 
 # ---------------------------------------------------------------------------

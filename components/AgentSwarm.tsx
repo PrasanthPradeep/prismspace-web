@@ -99,6 +99,109 @@ function StyledSelect({ value, onChange, options, className = '' }: StyledSelect
     </div>
   );
 }
+
+// ── Lightweight inline Markdown renderer ─────────────────────────────────────
+function MarkdownRenderer({ content }: { content: string }) {
+  const lines = content.split('\n');
+  const elements: React.ReactNode[] = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    // Fenced code block
+    if (line.startsWith('```')) {
+      const lang = line.slice(3).trim();
+      const codeLines: string[] = [];
+      i++;
+      while (i < lines.length && !lines[i].startsWith('```')) {
+        codeLines.push(lines[i]);
+        i++;
+      }
+      elements.push(
+        <pre key={`cb-${i}`} style={{ background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px', padding: '12px 14px', overflowX: 'auto', margin: '8px 0', fontSize: '0.78rem', lineHeight: 1.6, color: '#a5f3c0', fontFamily: 'monospace' }}>
+          {lang && <span style={{ display: 'block', fontSize: '0.65rem', color: 'rgba(255,255,255,0.3)', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{lang}</span>}
+          <code>{codeLines.join('\n')}</code>
+        </pre>
+      );
+      i++; continue;
+    }
+
+    // Headings
+    if (line.startsWith('### ')) { elements.push(<h5 key={`h5-${i}`} style={{ color: '#fff', fontWeight: 700, fontSize: '0.85rem', margin: '12px 0 4px' }}>{inlineMarkdown(line.slice(4))}</h5>); i++; continue; }
+    if (line.startsWith('## '))  { elements.push(<h4 key={`h4-${i}`} style={{ color: '#fff', fontWeight: 700, fontSize: '0.95rem', margin: '14px 0 5px' }}>{inlineMarkdown(line.slice(3))}</h4>); i++; continue; }
+    if (line.startsWith('# '))   { elements.push(<h3 key={`h3-${i}`} style={{ color: '#fff', fontWeight: 800, fontSize: '1.05rem', margin: '16px 0 6px' }}>{inlineMarkdown(line.slice(2))}</h3>); i++; continue; }
+
+    // Horizontal rule
+    if (/^[-*_]{3,}$/.test(line.trim())) {
+      elements.push(<hr key={`hr-${i}`} style={{ border: 'none', borderTop: '1px solid rgba(255,255,255,0.1)', margin: '12px 0' }} />);
+      i++; continue;
+    }
+
+    // Unordered list block
+    if (/^[-*+] /.test(line)) {
+      const items: string[] = [];
+      while (i < lines.length && /^[-*+] /.test(lines[i])) { items.push(lines[i].replace(/^[-*+] /, '')); i++; }
+      elements.push(
+        <ul key={`ul-${i}`} style={{ margin: '6px 0', paddingLeft: '18px', listStyleType: 'disc' }}>
+          {items.map((it, idx) => <li key={idx} style={{ color: 'rgba(255,255,255,0.85)', fontSize: '0.82rem', lineHeight: 1.65, marginBottom: '2px' }}>{inlineMarkdown(it)}</li>)}
+        </ul>
+      );
+      continue;
+    }
+
+    // Ordered list block
+    if (/^\d+\. /.test(line)) {
+      const items: string[] = [];
+      while (i < lines.length && /^\d+\. /.test(lines[i])) { items.push(lines[i].replace(/^\d+\. /, '')); i++; }
+      elements.push(
+        <ol key={`ol-${i}`} style={{ margin: '6px 0', paddingLeft: '18px', listStyleType: 'decimal' }}>
+          {items.map((it, idx) => <li key={idx} style={{ color: 'rgba(255,255,255,0.85)', fontSize: '0.82rem', lineHeight: 1.65, marginBottom: '2px' }}>{inlineMarkdown(it)}</li>)}
+        </ol>
+      );
+      continue;
+    }
+
+    // Blockquote
+    if (line.startsWith('> ')) {
+      const qLines: string[] = [];
+      while (i < lines.length && lines[i].startsWith('> ')) { qLines.push(lines[i].slice(2)); i++; }
+      elements.push(
+        <blockquote key={`bq-${i}`} style={{ borderLeft: '3px solid rgba(0,255,136,0.4)', paddingLeft: '12px', margin: '8px 0', color: 'rgba(255,255,255,0.6)', fontSize: '0.82rem', fontStyle: 'italic' }}>
+          {qLines.map((ql, qi) => <span key={qi}>{inlineMarkdown(ql)}<br /></span>)}
+        </blockquote>
+      );
+      continue;
+    }
+
+    // Blank line — small gap
+    if (line.trim() === '') { elements.push(<div key={`gap-${i}`} style={{ height: '6px' }} />); i++; continue; }
+
+    // Regular paragraph line
+    elements.push(
+      <p key={`p-${i}`} style={{ margin: '2px 0', color: 'rgba(255,255,255,0.88)', fontSize: '0.82rem', lineHeight: 1.7 }}>
+        {inlineMarkdown(line)}
+      </p>
+    );
+    i++;
+  }
+
+  return <div style={{ wordBreak: 'break-word' }}>{elements}</div>;
+}
+
+function inlineMarkdown(text: string): React.ReactNode {
+  const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g);
+  return parts.map((part, idx) => {
+    if (part.startsWith('**') && part.endsWith('**'))
+      return <strong key={idx} style={{ color: '#fff', fontWeight: 700 }}>{part.slice(2, -2)}</strong>;
+    if (part.startsWith('*') && part.endsWith('*'))
+      return <em key={idx} style={{ color: 'rgba(255,255,255,0.8)' }}>{part.slice(1, -1)}</em>;
+    if (part.startsWith('`') && part.endsWith('`'))
+      return <code key={idx} style={{ background: 'rgba(0,255,136,0.1)', color: '#a5f3c0', padding: '1px 5px', borderRadius: '4px', fontSize: '0.78rem', fontFamily: 'monospace' }}>{part.slice(1, -1)}</code>;
+    return part;
+  });
+}
+
 import {
   SwarmAgent,
   CreateAgentPayload,
@@ -131,7 +234,7 @@ interface AgentSwarmProps {
 }
 
 const MODELS: Record<ModelProvider, string[]> = {
-  nvidia: ['z-ai/glm-5.2'],
+  nvidia: ['nvidia/nemotron-3-nano-30b-a3b'],
   groq: ['llama-3.3-70b-versatile', 'llama3-70b-8192', 'mixtral-8x7b-32768'],
 };
 
@@ -734,10 +837,9 @@ export function AgentSwarm({ onClose }: AgentSwarmProps) {
               }
             />
 
-            {/* Provider + Model */}
-            <div className="flex gap-2">
+            {/* Provider + Model (stacked) */}
+            <div className="flex flex-col gap-1.5">
               <StyledSelect
-                className="flex-1"
                 value={provider}
                 onChange={(val) => handleProviderChange(val as ModelProvider)}
                 options={[
@@ -746,10 +848,12 @@ export function AgentSwarm({ onClose }: AgentSwarmProps) {
                 ]}
               />
               <StyledSelect
-                className="flex-1"
                 value={model}
                 onChange={setModel}
-                options={MODELS[provider].map((m) => ({ value: m, label: m }))}
+                options={MODELS[provider].map((m) => ({
+                  value: m,
+                  label: m === 'nvidia/nemotron-3-nano-30b-a3b' ? 'Nemotron' : m,
+                }))}
               />
             </div>
 
@@ -1453,8 +1557,8 @@ export function AgentSwarm({ onClose }: AgentSwarmProps) {
                     <h3 className="text-white/40 text-xs font-bold uppercase tracking-widest mb-6 flex items-center gap-2">
                       <span className="text-green-400">✨</span> Final Output
                     </h3>
-                    <div className="text-white/90 text-sm leading-relaxed whitespace-pre-wrap">
-                      {selectedAgent.result}
+                    <div className="text-white/90 text-sm leading-relaxed">
+                      <MarkdownRenderer content={selectedAgent.result ?? ''} />
                     </div>
                   </div>
                 )}
