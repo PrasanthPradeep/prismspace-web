@@ -23,6 +23,8 @@ import re
 import sqlite3
 import time
 import uuid
+import shutil
+import stat
 from datetime import datetime
 from typing import AsyncGenerator, Optional
 
@@ -69,6 +71,51 @@ TOOLS_ENV_PATH = os.path.join(TOOLS_DIR, ".env")
 
 # Workspace root: parent of the hive-backend directory (i.e. prismspace-web/)
 WORKSPACE_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# Hive backend directory (where most filesystem operations should happen by default)
+HIVE_BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# ---------------------------------------------------------------------------
+# Helper: Smart path resolution
+# ---------------------------------------------------------------------------
+
+def _resolve_path(raw_path: str, prefer_backend: bool = True) -> pathlib.Path:
+    """
+    Intelligently resolve a path provided by the LLM.
+    
+    If the path mentions 'hive-backend' or starts with common backend-relative paths,
+    resolve it relative to HIVE_BACKEND_DIR. Otherwise use WORKSPACE_ROOT.
+    
+    Args:
+        raw_path: The path string from the LLM (can be relative or absolute)
+        prefer_backend: If True, default to HIVE_BACKEND_DIR for relative paths
+        
+    Returns:
+        Resolved absolute pathlib.Path
+    """
+    p = pathlib.Path(raw_path)
+    
+    # Already absolute - use as-is
+    if p.is_absolute():
+        return p
+    
+    # Path explicitly mentions hive-backend
+    if "hive-backend" in raw_path or "hive_backend" in raw_path:
+        # Strip the hive-backend prefix if present
+        clean_path = raw_path.replace("hive-backend/", "").replace("hive-backend\\", "")
+        clean_path = clean_path.replace("hive_backend/", "").replace("hive_backend\\", "")
+        return pathlib.Path(HIVE_BACKEND_DIR) / clean_path
+    
+    # Common backend-relative paths
+    backend_indicators = ["test_", "hive/", ".env", "requirements.txt", "hive_api"]
+    if any(indicator in raw_path for indicator in backend_indicators):
+        return pathlib.Path(HIVE_BACKEND_DIR) / raw_path
+    
+    # Default behavior
+    if prefer_backend:
+        return pathlib.Path(HIVE_BACKEND_DIR) / raw_path
+    else:
+        return pathlib.Path(WORKSPACE_ROOT) / raw_path
 
 # ---------------------------------------------------------------------------
 # Pydantic models
@@ -189,48 +236,87 @@ def _extract_env_key(env_value: str) -> str:
 
 
 def _build_system_prompt() -> str:
-    """Build a context-aware system prompt that includes MCP tool information."""
+    """Build a context-aware system prompt that enforces strict ReAct behavior."""
     base = (
         "You are Hive, an autonomous AI operating inside the Hive platform (version 2.0). "
         "Your responsibility is to understand user intent, plan tasks, reason through problems, "
         "invoke MCP tools when required, and deliver accurate results while maintaining project context.\n\n"
+        
+        "# ⚠️ CRITICAL: STRICT REACT EXECUTION PROTOCOL ⚠️\n\n"
+        
+        "You MUST follow the ReAct pattern (Reason → Act → STOP → Observe) for EVERY interaction:\n\n"
+        
+        "1. **REASON** (optional, brief): Think about what needs to be done\n"
+        "2. **ACT**: If you need information, output EXACTLY ONE tool call in this format:\n"
+        "```json\n"
+        '{"tool": "tool_name", "arguments": {"arg1": "value1", "arg2": "value2"}}\n'
+        "```\n"
+        "3. **STOP IMMEDIATELY**: After outputting the tool call JSON, you MUST STOP generating text.\n"
+        "   - DO NOT write 'I will now...'\n"
+        "   - DO NOT write 'This will help me...'\n"
+        "   - DO NOT describe what the tool will do\n"
+        "   - DO NOT imagine or fabricate tool results\n"
+        "   - DO NOT write a summary of expected outcomes\n"
+        "   - Your generation MUST END immediately after the closing ```\n\n"
+        
+        "4. **OBSERVE**: Wait for the system to return the ACTUAL tool execution results\n"
+        "5. **RESPOND**: Only after receiving real tool results, synthesize your final answer\n\n"
+        
+        "## ❌ FORBIDDEN BEHAVIORS ❌\n\n"
+        
+        "You are ABSOLUTELY FORBIDDEN from:\n"
+        "- Hallucinating or imagining tool execution results\n"
+        "- Writing fake execution summaries like 'I have successfully moved 5 files...'\n"
+        "- Continuing to write text after emitting a tool call\n"
+        "- Describing what a tool 'will do' - just call it and STOP\n"
+        "- Outputting multiple tool calls in a single response (call one, wait for result, then call next if needed)\n"
+        "- Mixing tool calls with prose explanations in the same response\n\n"
+        
+        "## ✅ CORRECT BEHAVIOR EXAMPLES\n\n"
+        
+        "### Example 1: Single Tool Call (CORRECT)\n"
+        "User: 'List all TypeScript files in the project'\n"
+        "You:\n"
+        "```json\n"
+        '{"tool": "search_files", "arguments": {"pattern": "*.tsx", "target": "files"}}\n'
+        "```\n"
+        "[STOP - wait for system to return results]\n\n"
+        
+        "### Example 2: Response After Tool Result (CORRECT)\n"
+        "System: 'Tool result: Found 12 files: App.tsx, Header.tsx, ...'\n"
+        "You: 'I found 12 TypeScript files in your project: App.tsx, Header.tsx, ... [provide analysis]'\n\n"
+        
+        "### Example 3: No Tool Needed (CORRECT)\n"
+        "User: 'What is React?'\n"
+        "You: 'React is a JavaScript library for building user interfaces... [provide answer]'\n\n"
+        
+        "## ❌ INCORRECT BEHAVIOR EXAMPLES\n\n"
+        
+        "### Example 1: Hallucinated Results (WRONG)\n"
+        "User: 'List all TypeScript files'\n"
+        "You: 'I have searched the project and found 12 TypeScript files: App.tsx, Header.tsx, ...' ❌\n"
+        "[This is FORBIDDEN - you never actually called the tool!]\n\n"
+        
+        "### Example 2: Continuing After Tool Call (WRONG)\n"
+        "```json\n"
+        '{"tool": "search_files", "arguments": {"pattern": "*.tsx"}}\n'
+        "```\n"
+        "This will help me find all TypeScript files in the project. ❌\n"
+        "[This is FORBIDDEN - you must STOP after the tool call!]\n\n"
+        
+        "## Tool Call Format Rules\n\n"
+        "- Use ONLY the JSON format shown above\n"
+        "- DO NOT use XML tags like <tool_call>\n"
+        "- DO NOT use function call syntax like tool_name(arg1, arg2)\n"
+        "- Output EXACTLY one tool call per response when tools are needed\n"
+        "- The JSON must be wrapped in ```json and ``` markers\n\n"
+        
         "## Core Objectives\n"
-        "- Understand user intent before acting.\n"
-        "- Reason before responding.\n"
-        "- Prefer MCP tools over guessing.\n"
-        "- Complete the user's objective with minimal interaction.\n"
-        "- Maintain context throughout the session.\n"
-        "- Produce production-ready outputs.\n\n"
-        "## Reasoning Strategy\n"
-        "Internal reasoning is active. You reason silently through: Understand → Plan → Select Tool → Execute → Validate → Respond. "
-        "Never reveal your chain of thought. Always verify before answering.\n\n"
-        "## Active Agents\n"
-        "You orchestrate the following specialised sub-agents:\n"
-        "- **Planner Agent**: Break complex requests into executable subtasks.\n"
-        "- **Reasoning Agent**: Analyze requests and determine execution strategy.\n"
-        "- **Tool Selection Agent**: Choose the best MCP tool for each task.\n"
-        "- **Code Agent**: Generate, edit, debug, and explain production-quality code.\n"
-        "- **Figma Agent**: Create and edit Figma designs using MCP.\n"
-        "- **GitHub Agent**: Analyze repositories, commits, PRs, and issues.\n"
-        "- **Filesystem Agent**: Read, create, modify, and organize project files.\n"
-        "- **Browser Agent**: Navigate websites, extract information, and automate workflows.\n"
-        "- **Database Agent**: Query databases and generate optimized SQL.\n"
-        "- **Memory Agent**: Maintain long-term and session memory.\n"
-        "- **Research Agent**: Retrieve documentation, APIs, and technical references.\n"
-        "- **Validation Agent**: Verify outputs before returning them.\n\n"
-        "## MCP Policy\n"
-        "Always use MCP tools when available. Never fake tool results. Wait for tool responses. "
-        "Chain tools if needed. Validate arguments. Retry failed calls once. Prefer parallel calls.\n\n"
-        "## Coding Rules\n"
-        "Write modular, maintainable, production-quality code. Follow clean architecture. "
-        "Optimize performance. Avoid unnecessary complexity.\n\n"
-        "## Response Guidelines\n"
-        "Be concise and accurate. Avoid hallucination. Never reveal internal reasoning. "
-        "Explain failures clearly and suggest alternatives.\n\n"
-        "## Fallback Behavior\n"
-        "If a tool is missing: explain limitation and continue with best available reasoning. "
-        "If a tool fails: retry once, validate, then provide actionable guidance. "
-        "If information is missing: ask only the minimum clarification required.\n\n"
+        "- Understand user intent before acting\n"
+        "- Use MCP tools when you need information you don't have\n"
+        "- NEVER fake or guess tool results - always wait for real execution\n"
+        "- Provide accurate, complete answers based on actual tool results\n"
+        "- Maintain context throughout the session\n\n"
     )
 
     # Load MCP server info
@@ -299,6 +385,11 @@ def _build_system_prompt() -> str:
                     base += "- `edit_file(path, mode, ...)` — Modify existing files:\n"
                     base += "  - `mode='replace'` — fuzzy find/replace in a single file\n"
                     base += "  - `mode='patch'` — apply structured multi-file patches\n"
+                    base += "- `create_directory(path)` — Create a new directory and its parents\n"
+                    base += "- `delete_file(path, recursive)` — Delete a file or directory tree (blocks critical paths)\n"
+                    base += "- `move_file(source, destination)` — Move or rename a file or directory\n"
+                    base += "- `list_directory_tree(path, max_depth)` — Get a hierarchical tree view of a directory\n"
+                    base += "- `get_file_metadata(path)` — Get file size, permissions, and timestamps\n"
                     base += "\nUse the Filesystem Agent to read project files, generate code, apply edits, "
                     base += "organize directories, and inspect file structures without leaving the agent run.\n"
                 elif name == "sqlite":
@@ -350,68 +441,130 @@ def _normalise_chat_history(chat_history: list[ChatContextMessage]) -> list[dict
     return messages
 
 
-async def _call_groq(model: str, objective: str, chat_history: list[ChatContextMessage]) -> str:
-    """Call Groq API and return the response text."""
+async def _call_groq(
+    model: str, 
+    objective: str, 
+    chat_history: list[ChatContextMessage] | list[dict[str, str]]
+) -> str:
+    """Call Groq API with stop sequences to enforce ReAct pattern."""
     from groq import AsyncGroq
     client = AsyncGroq(api_key=os.environ.get("GROQ_API_KEY"))
+    
+    # Handle both ChatContextMessage objects and raw dicts
+    if chat_history and isinstance(chat_history[0], dict):
+        messages = chat_history
+    else:
+        messages = _normalise_chat_history(chat_history)
+    
+    # Build final message list
+    final_messages = [{"role": "system", "content": _build_system_prompt()}]
+    final_messages.extend(messages)
+    
+    # Add objective as user message if provided
+    if objective:
+        final_messages.append({"role": "user", "content": objective})
+    
     response = await client.chat.completions.create(
         model=model,
-        messages=[
-            {"role": "system", "content": _build_system_prompt()},
-            *_normalise_chat_history(chat_history),
-            {"role": "user", "content": objective},
-        ],
+        messages=final_messages,
         temperature=0.7,
         max_tokens=4096,
+        stop=["```\n\n", "```\n", "\n\n\n"],  # Stop after tool call code blocks
     )
     return response.choices[0].message.content or "(No response generated)"
 
 
-async def _call_openai(model: str, objective: str, chat_history: list[ChatContextMessage]) -> str:
-    """Call OpenAI API and return the response text."""
+async def _call_openai(
+    model: str, 
+    objective: str, 
+    chat_history: list[ChatContextMessage] | list[dict[str, str]]
+) -> str:
+    """Call OpenAI API with stop sequences to enforce ReAct pattern."""
     from openai import AsyncOpenAI
     client = AsyncOpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+    
+    # Handle both ChatContextMessage objects and raw dicts
+    if chat_history and isinstance(chat_history[0], dict):
+        messages = chat_history
+    else:
+        messages = _normalise_chat_history(chat_history)
+    
+    # Build final message list
+    final_messages = [{"role": "system", "content": _build_system_prompt()}]
+    final_messages.extend(messages)
+    
+    # Add objective as user message if provided
+    if objective:
+        final_messages.append({"role": "user", "content": objective})
+    
     response = await client.chat.completions.create(
         model=model,
-        messages=[
-            {"role": "system", "content": _build_system_prompt()},
-            *_normalise_chat_history(chat_history),
-            {"role": "user", "content": objective},
-        ],
+        messages=final_messages,
         temperature=0.7,
         max_tokens=4096,
+        stop=["```\n\n", "```\n", "\n\n\n"],  # Stop after tool call code blocks
     )
     return response.choices[0].message.content or "(No response generated)"
 
 
-async def _call_anthropic(model: str, objective: str, chat_history: list[ChatContextMessage]) -> str:
-    """Call Anthropic API and return the response text."""
+async def _call_anthropic(
+    model: str, 
+    objective: str, 
+    chat_history: list[ChatContextMessage] | list[dict[str, str]]
+) -> str:
+    """Call Anthropic API with stop sequences to enforce ReAct pattern."""
     import anthropic
     client = anthropic.AsyncAnthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+    
+    # Handle both ChatContextMessage objects and raw dicts
+    if chat_history and isinstance(chat_history[0], dict):
+        messages = chat_history
+    else:
+        messages = _normalise_chat_history(chat_history)
+    
+    # Build final message list (Anthropic doesn't include system in messages array)
+    final_messages = list(messages)
+    
+    # Add objective as user message if provided
+    if objective:
+        final_messages.append({"role": "user", "content": objective})
+    
     response = await client.messages.create(
         model=model,
         max_tokens=4096,
         system=_build_system_prompt(),
-        messages=[
-            *_normalise_chat_history(chat_history),
-            {"role": "user", "content": objective},
-        ],
+        messages=final_messages,
+        stop_sequences=["```\n\n", "```\n", "\n\n\n"],  # Stop after tool call code blocks
     )
     return response.content[0].text if response.content else "(No response generated)"
 
 
-async def _call_google(model: str, objective: str, chat_history: list[ChatContextMessage]) -> str:
+async def _call_google(
+    model: str, 
+    objective: str, 
+    chat_history: list[ChatContextMessage] | list[dict[str, str]]
+) -> str:
     """Call Google Gemini API and return the response text."""
     from google import genai
     client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
+    
+    # Handle both ChatContextMessage objects and raw dicts
+    if chat_history and isinstance(chat_history[0], dict):
+        messages = chat_history
+    else:
+        messages = _normalise_chat_history(chat_history)
+    
     history_text = "\n".join(
         f"{message['role'].title()}: {message['content']}"
-        for message in _normalise_chat_history(chat_history)
+        for message in messages
     )
     full_prompt = _build_system_prompt()
     if history_text:
         full_prompt += "\n\n## Previous Chat Context\n" + history_text
-    full_prompt += "\n\n---\n\nUser request: " + objective
+    
+    if objective:
+        full_prompt += "\n\n---\n\nUser request: " + objective
+    
     response = await client.aio.models.generate_content(
         model=model,
         contents=full_prompt,
@@ -419,25 +572,41 @@ async def _call_google(model: str, objective: str, chat_history: list[ChatContex
     return response.text or "(No response generated)"
 
 
-async def _call_nvidia(model: str, objective: str, chat_history: list[ChatContextMessage]) -> str:
-    """Call NVIDIA NIM API (OpenAI-compatible) with streaming and reasoning budget."""
+async def _call_nvidia(
+    model: str, 
+    objective: str, 
+    chat_history: list[ChatContextMessage] | list[dict[str, str]]
+) -> str:
+    """Call NVIDIA NIM API (OpenAI-compatible) with streaming, reasoning budget, and stop sequences."""
     from openai import AsyncOpenAI
     client = AsyncOpenAI(
         base_url="https://integrate.api.nvidia.com/v1",
         api_key=os.environ.get("NVIDIA_API_KEY", "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"),
     )
+    
+    # Handle both ChatContextMessage objects and raw dicts
+    if chat_history and isinstance(chat_history[0], dict):
+        messages = chat_history
+    else:
+        messages = _normalise_chat_history(chat_history)
+    
+    # Build final message list
+    final_messages = [{"role": "system", "content": _build_system_prompt()}]
+    final_messages.extend(messages)
+    
+    # Add objective as user message if provided
+    if objective:
+        final_messages.append({"role": "user", "content": objective})
+    
     chunks: list[str] = []
     stream = await client.chat.completions.create(
         model=model,
-        messages=[
-            {"role": "system", "content": _build_system_prompt()},
-            *_normalise_chat_history(chat_history),
-            {"role": "user", "content": objective},
-        ],
+        messages=final_messages,
         temperature=1,
         top_p=1,
         max_tokens=16384,
         extra_body={"reasoning_budget": 16384},
+        stop=["```\n\n", "```\n", "\n\n\n"],  # Stop after tool call code blocks
         stream=True,
     )
     async for chunk in stream:
@@ -578,9 +747,7 @@ def _exec_search_files(args: dict) -> str:
 def _exec_read_file(args: dict) -> str:
     """Execute read_file tool."""
     raw_path = args.get("path", "")
-    p = pathlib.Path(raw_path)
-    if not p.is_absolute():
-        p = pathlib.Path(WORKSPACE_ROOT) / p
+    p = _resolve_path(raw_path)
     try:
         content = p.read_text(encoding="utf-8", errors="ignore")
         lines = content.splitlines()
@@ -588,22 +755,136 @@ def _exec_read_file(args: dict) -> str:
         tail = f"\n... ({len(lines) - 300} more lines)" if len(lines) > 300 else ""
         return f"--- {p} ({len(lines)} lines) ---\n{preview}{tail}"
     except OSError as exc:
-        return f"Error reading '{p}': {exc}"
+        return f"Error reading '{raw_path}' (resolved to {p}): {exc}"
 
 
 def _exec_write_file(args: dict) -> str:
     """Execute write_file tool."""
     raw_path = args.get("path", "")
     content = args.get("content", "")
-    p = pathlib.Path(raw_path)
-    if not p.is_absolute():
-        p = pathlib.Path(WORKSPACE_ROOT) / p
+    p = _resolve_path(raw_path)
     try:
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(content, encoding="utf-8")
         return f"Successfully wrote {len(content)} chars to '{p}'"
     except OSError as exc:
-        return f"Error writing '{p}': {exc}"
+        return f"Error writing '{raw_path}': {exc}"
+
+
+def _exec_create_directory(args: dict) -> str:
+    raw_path = args.get("path", "")
+    p = _resolve_path(raw_path)
+    try:
+        p.mkdir(parents=True, exist_ok=True)
+        return f"Successfully created directory: {raw_path} (at {p})"
+    except Exception as e:
+        return f"Error creating directory '{raw_path}': {e}"
+
+
+def _exec_delete_file(args: dict) -> str:
+    raw_path = args.get("path", "")
+    recursive = args.get("recursive", False)
+    
+    # Use smart path resolution
+    p = _resolve_path(raw_path)
+        
+    parts = p.parts
+    if any(part in (".git", "node_modules", ".next", ".venv") for part in parts):
+        return f"Error: Deletion of critical directory '{raw_path}' is blocked for safety."
+        
+    if not p.exists():
+        return f"Error: Path not found: {raw_path} (resolved to: {p})"
+        
+    try:
+        if p.is_dir():
+            if not recursive:
+                return f"Error: '{raw_path}' is a directory. Use recursive=True to delete."
+            shutil.rmtree(p)
+            return f"Successfully deleted directory tree: {raw_path} (at {p})"
+        else:
+            p.unlink()
+            return f"Successfully deleted file: {raw_path} (at {p})"
+    except Exception as e:
+        return f"Error deleting path '{raw_path}': {e}"
+
+
+def _exec_move_file(args: dict) -> str:
+    raw_src = args.get("source", "")
+    raw_dst = args.get("destination", "")
+    
+    # Use smart path resolution
+    p_src = _resolve_path(raw_src)
+    p_dst = _resolve_path(raw_dst)
+        
+    if not p_src.exists():
+        return f"Error: Source not found: {raw_src} (resolved to: {p_src})"
+        
+    try:
+        p_dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(p_src), str(p_dst))
+        return f"Successfully moved '{raw_src}' to '{raw_dst}' (from {p_src} to {p_dst})"
+    except Exception as e:
+        return f"Error moving file from '{raw_src}' to '{raw_dst}': {e}"
+
+
+def _exec_list_directory_tree(args: dict) -> str:
+    raw_path = args.get("path", "")
+    max_depth = int(args.get("max_depth", 3))
+    p = _resolve_path(raw_path)
+        
+    if not p.is_dir():
+        return f"Error: Not a directory: {raw_path} (resolved to: {p})"
+        
+    def _build_tree(dir_path: pathlib.Path, current_depth: int = 0) -> list[str]:
+        if current_depth > max_depth:
+            return ["  " * current_depth + "... (max depth reached)"]
+            
+        lines = []
+        try:
+            entries = sorted(list(dir_path.iterdir()), key=lambda x: (not x.is_dir(), x.name))
+            for entry in entries:
+                if entry.name in (".git", "node_modules", ".next", ".venv"):
+                    lines.append("  " * current_depth + f"📂 {entry.name}/ (skipped)")
+                    continue
+                if entry.is_dir():
+                    lines.append("  " * current_depth + f"📂 {entry.name}/")
+                    lines.extend(_build_tree(entry, current_depth + 1))
+                else:
+                    lines.append("  " * current_depth + f"📄 {entry.name}")
+        except Exception as e:
+            lines.append("  " * current_depth + f"! Error reading: {e}")
+        return lines
+
+    tree = _build_tree(p)
+    return f"Directory Tree for {raw_path} (max depth {max_depth}):\n" + "\n".join(tree[:2000])
+
+
+def _exec_get_file_metadata(args: dict) -> str:
+    raw_path = args.get("path", "")
+    p = _resolve_path(raw_path)
+        
+    if not p.exists():
+        return f"Error: Path not found: {raw_path} (resolved to: {p})"
+        
+    try:
+        stat_info = p.stat()
+        is_dir = p.is_dir()
+        
+        size = stat_info.st_size
+        created = datetime.fromtimestamp(stat_info.st_ctime).isoformat()
+        modified = datetime.fromtimestamp(stat_info.st_mtime).isoformat()
+        permissions = stat.filemode(stat_info.st_mode)
+        
+        return (
+            f"Metadata for {raw_path}:\n"
+            f"- Type: {'Directory' if is_dir else 'File'}\n"
+            f"- Size: {size:,} bytes\n"
+            f"- Created: {created}\n"
+            f"- Modified: {modified}\n"
+            f"- Permissions: {permissions}"
+        )
+    except Exception as e:
+        return f"Error reading metadata: {e}"
 
 
 def _exec_sqlite(args: dict, operation: str) -> str:
@@ -698,6 +979,16 @@ def _dispatch_tool(tool_call: dict) -> str:
     if tool == "edit_file":
         # Basic: treat as read + write
         return "edit_file: use read_file then write_file for now — direct patch execution coming soon."
+    if tool == "create_directory":
+        return _exec_create_directory(args)
+    if tool == "delete_file":
+        return _exec_delete_file(args)
+    if tool == "move_file":
+        return _exec_move_file(args)
+    if tool == "list_directory_tree":
+        return _exec_list_directory_tree(args)
+    if tool == "get_file_metadata":
+        return _exec_get_file_metadata(args)
 
     # SQLite tools
     if tool in ("read_query", "write_query", "create_table", "list_tables", "describe_table"):
@@ -717,59 +1008,224 @@ async def _tool_use_loop(
     agent_id: str,
     initial_response: str,
     request: "CreateAgentRequest",
+    max_iterations: int = 10,
+    max_correction_attempts: int = 3,
 ) -> str:
     """
-    If the LLM response contains tool calls, execute them and call the LLM
-    a second time to synthesise a final answer from the real results.
-    Returns the final answer string.
+    Implements a strict ReAct loop (Reason → Act → STOP → Observe) with 
+    aggressive self-correction for hallucination prevention:
+    
+    1. Check if LLM response contains a tool call
+    2. If yes: execute tool, return result to LLM as new message, repeat
+    3. If no AND first iteration: REJECT and force retry (hallucination detected)
+    4. If no AND later iteration: treat as final answer
+    5. Enforce max_iterations to prevent infinite loops
+    
+    Self-correction kicks in when the model outputs a conversational summary
+    instead of a tool call on the first iteration. We reject this and force
+    the model to try again with a harsh correction prompt.
     """
-    tool_calls = _parse_tool_calls(initial_response)
-    if not tool_calls:
-        return initial_response  # No tools detected — return as-is
-
-    _log(agent_id, f"🔧 Detected {len(tool_calls)} tool call(s) — executing...")
-
-    tool_results: list[str] = []
-    for tc in tool_calls:
-        tool_name = tc.get("tool", "unknown")
-        tool_args = tc.get("arguments", {})
-        _log(agent_id, f"   → Calling `{tool_name}` with args: {json.dumps(tool_args)}")
-        result = _dispatch_tool(tc)
-        preview = result[:200].replace("\n", " ")
-        _log(agent_id, f"   ✓ `{tool_name}` returned {len(result)} chars: {preview}...")
-        tool_results.append(
-            f"=== Tool: {tool_name} ===\n"
-            f"Arguments: {json.dumps(tool_args, indent=2)}\n"
-            f"Result:\n{result}"
+    conversation_history: list[dict[str, str]] = _normalise_chat_history(request.chat_history)
+    conversation_history.append({"role": "user", "content": request.objective})
+    
+    current_response = initial_response
+    iteration = 0
+    correction_attempts = 0
+    
+    while iteration < max_iterations:
+        iteration += 1
+        
+        # Check if current response contains a tool call
+        tool_calls = _parse_tool_calls(current_response)
+        
+        if not tool_calls:
+            # ============================================================
+            # HALLUCINATION DETECTION & SELF-CORRECTION
+            # ============================================================
+            # If this is the first iteration and no tool calls detected,
+            # the model likely hallucinated a conversational response.
+            # Aggressively reject and force it to output a tool call.
+            # ============================================================
+            
+            if iteration == 1 and correction_attempts < max_correction_attempts:
+                correction_attempts += 1
+                
+                _log(agent_id, f"⚠️ HALLUCINATION DETECTED on iteration {iteration} (attempt {correction_attempts}/{max_correction_attempts})")
+                _log(agent_id, f"   Model output conversational text instead of tool call JSON")
+                _log(agent_id, f"   Response preview: {current_response[:200].replace(chr(10), ' ')}...")
+                
+                # Add the hallucinated response to history as assistant message
+                conversation_history.append({"role": "assistant", "content": current_response})
+                
+                # Build a HARSH correction message
+                correction_message = (
+                    "❌ ERROR: HALLUCINATION DETECTED ❌\n\n"
+                    "You output a conversational summary instead of executing tools.\n"
+                    "This is FORBIDDEN. You are NOT allowed to:\n"
+                    "- Describe what you plan to do\n"
+                    "- Summarize what you 'did' without actually calling tools\n"
+                    "- Write conversational responses before calling tools\n"
+                    "- Imagine or fabricate tool execution results\n\n"
+                    
+                    "YOU MUST:\n"
+                    "1. Output ONLY a raw JSON tool call object in a code block\n"
+                    "2. Use this EXACT format:\n"
+                    "```json\n"
+                    '{"tool": "tool_name", "arguments": {"key": "value"}}\n'
+                    "```\n"
+                    "3. STOP IMMEDIATELY after the closing ```\n"
+                    "4. DO NOT write anything else\n\n"
+                    
+                    "Available tools you can call:\n"
+                    "- search_files: Find files by pattern or search content\n"
+                    "- read_file: Read a file's contents\n"
+                    "- write_file: Write content to a file\n"
+                    "- create_directory: Create a new directory\n"
+                    "- delete_file: Delete a file or directory\n"
+                    "- move_file: Move or rename a file\n"
+                    "- list_directory_tree: Get directory structure\n"
+                    "- get_file_metadata: Get file information\n"
+                    "- set_memory: Store a value in memory\n"
+                    "- get_memory: Retrieve a value from memory\n"
+                    "- read_query: Execute SQL SELECT query\n"
+                    "- write_query: Execute SQL INSERT/UPDATE/DELETE\n\n"
+                    
+                    f"Original user request: {request.objective}\n\n"
+                    
+                    "NOW: Output the JSON tool call and NOTHING ELSE."
+                )
+                
+                conversation_history.append({"role": "user", "content": correction_message})
+                
+                _log(agent_id, f"🔄 Forcing retry with correction prompt (attempt {correction_attempts}/{max_correction_attempts})...")
+                
+                # Call LLM again with correction
+                provider = request.provider.lower()
+                
+                try:
+                    if provider == "groq":
+                        current_response = await _call_groq(request.model, "", conversation_history)
+                    elif provider == "nvidia":
+                        current_response = await _call_nvidia(request.model, "", conversation_history)
+                    elif provider == "openai":
+                        current_response = await _call_openai(request.model, "", conversation_history)
+                    elif provider == "anthropic":
+                        current_response = await _call_anthropic(request.model, "", conversation_history)
+                    elif provider == "google":
+                        current_response = await _call_google(request.model, "", conversation_history)
+                    else:
+                        _log(agent_id, f"⚠️ Unknown provider: {provider}, giving up")
+                        return current_response
+                except Exception as exc:
+                    _log(agent_id, f"❌ Error during correction retry: {exc}")
+                    return f"Error during hallucination correction: {exc}\n\nOriginal response:\n{current_response}"
+                
+                _log(agent_id, f"✓ Received correction retry response ({len(current_response)} chars)")
+                
+                # Decrement iteration counter so we don't waste iterations on corrections
+                iteration -= 1
+                
+                # Continue loop to re-check if tool calls now exist
+                continue
+            
+            # ============================================================
+            # If we've exhausted correction attempts or this is a later
+            # iteration, treat it as a final answer (with warning if first iter)
+            # ============================================================
+            
+            if iteration == 1 and correction_attempts >= max_correction_attempts:
+                _log(agent_id, f"❌ FAILED to correct hallucination after {max_correction_attempts} attempts")
+                _log(agent_id, f"⚠️ Returning hallucinated response as-is (model is non-compliant)")
+                return (
+                    f"[WARNING: Model failed to follow tool call instructions after {max_correction_attempts} correction attempts]\n\n"
+                    f"{current_response}"
+                )
+            
+            # Normal case: no tool calls in later iteration = final answer
+            _log(agent_id, f"✓ No tool calls detected in iteration {iteration} - treating as final answer")
+            return current_response
+        
+        # ============================================================
+        # Tool calls detected - execute them
+        # ============================================================
+        
+        _log(agent_id, f"🔧 Iteration {iteration}: Detected {len(tool_calls)} tool call(s)")
+        
+        # Reset correction attempts counter (model is now compliant)
+        if correction_attempts > 0:
+            _log(agent_id, f"✓ Model corrected after {correction_attempts} attempt(s)")
+            correction_attempts = 0
+        
+        # Execute ALL tool calls and collect results
+        tool_results: list[str] = []
+        for idx, tc in enumerate(tool_calls, 1):
+            tool_name = tc.get("tool", "unknown")
+            tool_args = tc.get("arguments", {})
+            
+            _log(agent_id, f"   [{idx}/{len(tool_calls)}] Executing `{tool_name}` with args: {json.dumps(tool_args, ensure_ascii=False)[:100]}...")
+            
+            result = _dispatch_tool(tc)
+            preview = result[:150].replace("\n", " ")
+            _log(agent_id, f"   ✓ `{tool_name}` returned {len(result)} chars: {preview}...")
+            
+            tool_results.append(
+                f"=== Tool Call {idx}: {tool_name} ===\n"
+                f"Arguments:\n{json.dumps(tool_args, indent=2, ensure_ascii=False)}\n\n"
+                f"Execution Result:\n{result}\n"
+            )
+        
+        # Add assistant's tool call to conversation history
+        conversation_history.append({"role": "assistant", "content": current_response})
+        
+        # Build observation message with REAL tool results
+        observation_message = (
+            f"## Tool Execution Results (Iteration {iteration})\n\n"
+            f"You called {len(tool_calls)} tool(s). Here are the REAL execution results:\n\n"
+            + "\n".join(tool_results)
+            + "\n\n---\n\n"
+            "Based on these REAL results, you can now:\n"
+            "1. Call another tool if you need more information (output another tool call JSON)\n"
+            "2. Provide your final answer to the user's question (if you have enough information)\n\n"
+            "Remember: DO NOT hallucinate results. DO NOT describe what you 'did' - the tools were already executed. "
+            "Either call another tool OR synthesize a final answer from the results above."
         )
-
-    # Build a synthesis prompt and call the LLM again
-    synthesis_objective = (
-        f"You were asked: {request.objective}\n\n"
-        f"You called {len(tool_calls)} tool(s). Here are the real results:\n\n"
-        + "\n\n".join(tool_results)
-        + "\n\nUsing ONLY the tool results above, provide a complete, "
-          "accurate, and well-formatted final answer to the user's question. "
-          "Do NOT output more tool calls — synthesise from the data you have."
+        
+        # Add observation to conversation history
+        conversation_history.append({"role": "user", "content": observation_message})
+        
+        _log(agent_id, f"📝 Sending {len(tool_results)} tool result(s) back to LLM for iteration {iteration + 1}...")
+        
+        # Call LLM again with the updated conversation (including tool results)
+        provider = request.provider.lower()
+        
+        try:
+            if provider == "groq":
+                current_response = await _call_groq(request.model, "", conversation_history)
+            elif provider == "nvidia":
+                current_response = await _call_nvidia(request.model, "", conversation_history)
+            elif provider == "openai":
+                current_response = await _call_openai(request.model, "", conversation_history)
+            elif provider == "anthropic":
+                current_response = await _call_anthropic(request.model, "", conversation_history)
+            elif provider == "google":
+                current_response = await _call_google(request.model, "", conversation_history)
+            else:
+                _log(agent_id, f"⚠️ Unknown provider: {provider}, breaking loop")
+                return current_response
+        except Exception as exc:
+            _log(agent_id, f"❌ Error in iteration {iteration}: {exc}")
+            return f"Error during tool execution loop: {exc}\n\nLast valid response:\n{current_response}"
+        
+        _log(agent_id, f"✓ Received response for iteration {iteration + 1} ({len(current_response)} chars)")
+        
+        # Continue loop to check if new response has more tool calls
+    
+    # Max iterations reached
+    _log(agent_id, f"⚠️ Max iterations ({max_iterations}) reached. Returning current response.")
+    return (
+        f"[Note: Reached maximum iteration limit of {max_iterations}]\n\n"
+        f"{current_response}"
     )
-
-    _log(agent_id, f"📝 Synthesising final answer from {len(tool_calls)} tool result(s)...")
-
-    provider = request.provider.lower()
-    if provider == "groq":
-        final = await _call_groq(request.model, synthesis_objective, [])
-    elif provider == "nvidia":
-        final = await _call_nvidia(request.model, synthesis_objective, [])
-    elif provider == "openai":
-        final = await _call_openai(request.model, synthesis_objective, [])
-    elif provider == "anthropic":
-        final = await _call_anthropic(request.model, synthesis_objective, [])
-    elif provider == "google":
-        final = await _call_google(request.model, synthesis_objective, [])
-    else:
-        final = initial_response  # fallback
-
-    return final
 
 
 # ---------------------------------------------------------------------------
