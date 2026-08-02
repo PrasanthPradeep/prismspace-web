@@ -1,0 +1,453 @@
+{
+  "project": {
+    "name": "PrismSpace Agent Orchestration",
+    "workspace": "C:\\Users\\nobin\\OneDrive\\Documents\\Projects\\prismspace-web",
+    "observed_components": {
+      "frontend": "Next.js AgentSwarm UI",
+      "backend": "FastAPI Hive bridge",
+      "primary_backend_file": "hive-backend/hive_api.py",
+      "agent_ui_file": "components/AgentSwarm.tsx",
+      "client_file": "lib/agent-swarm-client.ts"
+    },
+    "current_orchestration_flow": [
+      "User submits objective",
+      "Frontend sends objective, provider, model, max_agents, human_in_loop, and chat_history",
+      "Backend creates an agent run",
+      "Hive-style runtime plans and logs a multi-agent execution",
+      "Selected provider/model is called",
+      "Result is streamed and displayed in the Agent Swarm UI"
+    ]
+  },
+  "main_output_model": {
+    "recommended_name": "PrismSpace Agent Orchestrator Model",
+    "technical_name": "Context-Aware Multi-Agent Routing and Planning Model",
+    "purpose": "A policy layer above existing LLM providers that decides task type, sub-agents, tools, provider/model, agent count, validation strategy, human approval, and final response strategy.",
+    "important_note": "This model does not replace GPT, Claude, Gemini, NVIDIA, Groq, or other LLMs. It sits above them as an orchestration brain."
+  },
+  "recommended_model_files": [
+    {
+      "file": "models/intent_classifier.joblib",
+      "extension": ".joblib",
+      "purpose": "Lightweight classifier for task intent"
+    },
+    {
+      "file": "models/agent_router.joblib",
+      "extension": ".joblib",
+      "purpose": "Router for selecting specialized agents or MCP tools"
+    },
+    {
+      "file": "models/model_router.joblib",
+      "extension": ".joblib",
+      "purpose": "Router for choosing LLM provider/model"
+    },
+    {
+      "file": "models/reward_model.safetensors",
+      "extension": ".safetensors",
+      "purpose": "Neural reward/evaluator model trained from feedback"
+    },
+    {
+      "file": "models/orchestration_policy.json",
+      "extension": ".json",
+      "purpose": "Policy rules, DAG strategy, thresholds, and routing configuration"
+    }
+  ],
+  "model_extension_guidance": {
+    "scikit_learn": [".pkl", ".joblib"],
+    "xgboost_lightgbm": [".json", ".bin", ".pkl"],
+    "pytorch_transformer": [".pt", ".pth", ".bin", ".safetensors"],
+    "hugging_face": [".safetensors", "config.json"],
+    "onnx": [".onnx"],
+    "tensorflow_keras": [".h5", ".keras"],
+    "local_llm": [".gguf"],
+    "policy_config": [".json", ".yaml"],
+    "best_start_for_this_project": [".joblib", ".json"],
+    "best_later_for_neural_models": [".safetensors"]
+  },
+  "orchestration_functions": [
+    {
+      "function": "Task Intent Classification",
+      "output_model": "Intent classifier model",
+      "2024_or_newer_methods": [
+        "Transformer fine-tuning",
+        "Instruction-tuned classifier",
+        "Embedding classifier using BGE-M3 or E5-Mistral-style embeddings",
+        "SetFit-style few-shot classifier"
+      ],
+      "use_case": "Classify request as code, Figma, GitHub, browser, database, research, mixed workflow, and similar task types.",
+      "practical_start": "Sentence embeddings plus a lightweight classifier such as Logistic Regression, XGBoost, or LightGBM."
+    },
+    {
+      "function": "Agent Router / Tool Router",
+      "output_model": "Agent router model",
+      "2024_or_newer_methods": [
+        "RouteLLM-style preference router",
+        "Cross-encoder reranker",
+        "Embedding retrieval plus reranking",
+        "LLM-as-router",
+        "Function-call router"
+      ],
+      "use_case": "Select Planner, Code Agent, Figma Agent, GitHub Agent, Filesystem Agent, Browser Agent, Database Agent, Research Agent, Validation Agent, or MCP tools.",
+      "practical_start": "Embedding retrieval over tool/agent descriptions plus a cross-encoder or LLM reranker."
+    },
+    {
+      "function": "Model Provider Router",
+      "output_model": "LLM router model",
+      "2024_or_newer_methods": [
+        "Hybrid LLM",
+        "RouteLLM",
+        "Contextual bandit routing",
+        "Cost-aware query routing",
+        "Quality-aware query routing"
+      ],
+      "use_case": "Choose OpenAI, Anthropic, Google, Groq, NVIDIA, or another provider based on quality, cost, latency, task type, and past success.",
+      "practical_start": "Contextual bandit or supervised router trained from task metadata and result quality."
+    },
+    {
+      "function": "Workflow / DAG Planning",
+      "output_model": "Planner model or DAG generator",
+      "2024_or_newer_methods": [
+        "Self-Discover",
+        "LLMCompiler",
+        "Graph-based planning",
+        "Graph neural network task planning",
+        "Language Agent Tree Search",
+        "Monte Carlo Tree Search planning"
+      ],
+      "use_case": "Convert user objectives into multi-agent DAGs: plan, execute, validate, retry, evolve.",
+      "practical_start": "LLM-generated JSON DAG with validation rules and deterministic execution."
+    },
+    {
+      "function": "Success / Failure Prediction",
+      "output_model": "Run outcome predictor",
+      "2024_or_newer_methods": [
+        "Gradient-boosted trees",
+        "TabPFN v2-style tabular foundation models",
+        "Graph neural workflow predictors",
+        "Uncertainty-aware classifiers"
+      ],
+      "use_case": "Predict whether an agent run will fail, exceed budget, need human approval, or require more agents.",
+      "practical_start": "XGBoost or LightGBM over telemetry: task type, provider, model, tool count, retry count, latency, errors, and cost."
+    },
+    {
+      "function": "Reward Model / Output Scorer",
+      "output_model": "Reward model or evaluator model",
+      "2024_or_newer_methods": [
+        "ORPO",
+        "KTO",
+        "SimPO",
+        "DPO variants",
+        "Pairwise reward modeling",
+        "Calibrated LLM-as-judge"
+      ],
+      "use_case": "Learn from human approvals, rejected outputs, edited responses, task success, and failed runs.",
+      "practical_start": "Pairwise preference dataset from accepted versus rejected agent outputs."
+    },
+    {
+      "function": "Reinforcement Learning for Orchestration",
+      "output_model": "Agent orchestration policy model",
+      "2024_or_newer_methods": [
+        "Contextual bandits",
+        "Offline reinforcement learning",
+        "PPO-style policy optimization",
+        "DPO/ORPO/KTO-style preference optimization",
+        "MCTS plus reward model"
+      ],
+      "use_case": "Learn when to spawn more agents, retry, ask the user, call tools, validate, or stop.",
+      "practical_start": "Start with contextual bandits before full PPO or online RL."
+    },
+    {
+      "function": "Anomaly Detection",
+      "output_model": "Agent run anomaly detector",
+      "2024_or_newer_methods": [
+        "LLM-based log anomaly detection",
+        "Transformer log-sequence models",
+        "Isolation Forest over telemetry",
+        "Autoencoder anomaly detection"
+      ],
+      "use_case": "Detect stuck agents, repeated tool failures, high token burn, strange latency, failed loops, and abnormal logs.",
+      "practical_start": "Rules plus Isolation Forest over run telemetry."
+    },
+    {
+      "function": "Clustering / Template Discovery",
+      "output_model": "Workflow template discovery model",
+      "2024_or_newer_methods": [
+        "Embedding clustering",
+        "HDBSCAN",
+        "BERTopic-style topic clustering",
+        "Graph community detection",
+        "GraphRAG community summaries"
+      ],
+      "use_case": "Group similar user tasks and discover reusable agent workflow templates.",
+      "practical_start": "Embed objectives and successful DAGs, cluster with HDBSCAN, then label clusters with an LLM."
+    },
+    {
+      "function": "Retrieval / Memory Ranking",
+      "output_model": "Retriever plus reranker model",
+      "2024_or_newer_methods": [
+        "GraphRAG",
+        "Hybrid retrieval",
+        "BGE-M3 embeddings",
+        "Cross-encoder reranking",
+        "Knowledge graph retrieval"
+      ],
+      "use_case": "Retrieve previous runs, project docs, memory, similar workflows, tool examples, and file context.",
+      "practical_start": "Hybrid BM25 plus vector search with reranking."
+    },
+    {
+      "function": "Time / Cost Prediction",
+      "output_model": "Cost-latency predictor",
+      "2024_or_newer_methods": [
+        "TabPFN v2-style tabular prediction",
+        "LightGBM",
+        "XGBoost",
+        "Bayesian regression",
+        "Quantile regression"
+      ],
+      "use_case": "Predict token cost, latency, number of tool calls, and number of workers needed.",
+      "practical_start": "XGBoost or LightGBM regression with uncertainty estimates."
+    },
+    {
+      "function": "Human Approval Prediction",
+      "output_model": "Risk / approval classifier",
+      "2024_or_newer_methods": [
+        "Calibrated binary classifier",
+        "Conformal prediction",
+        "Uncertainty-aware classifier",
+        "KTO-style binary feedback learning"
+      ],
+      "use_case": "Decide whether a task needs human approval for file writes, GitHub actions, external APIs, expensive tasks, or destructive operations.",
+      "practical_start": "Rule-based risk labels plus calibrated classifier."
+    },
+    {
+      "function": "Multi-Agent Answer Aggregation",
+      "output_model": "Aggregator or judge model",
+      "2024_or_newer_methods": [
+        "Mixture-of-Agents",
+        "Debate/critic aggregation",
+        "Rank-and-refine",
+        "Reward-model reranking"
+      ],
+      "use_case": "Combine outputs from multiple agents or models and pick/refine the best final answer.",
+      "practical_start": "Generate candidates from multiple agents, score with evaluator, refine final output."
+    }
+  ],
+  "datasets_evaluated": [
+    {
+      "name": "LARK-Lab/EnvFactory-SFT-FILTERED",
+      "url": "https://huggingface.co/datasets/LARK-Lab/EnvFactory-SFT-FILTERED",
+      "useful": true,
+      "recommendation": "Highly recommended",
+      "best_for": [
+        "Supervised fine-tuning for tool-use agents",
+        "MCP call behavior",
+        "Agent/tool routing"
+      ],
+      "notes": "Filtered SFT dataset containing 53,400 tool-use trajectories synthesized using EnvFactory."
+    },
+    {
+      "name": "LARK-Lab/EnvFactory-RL",
+      "url": "https://huggingface.co/datasets/LARK-Lab/EnvFactory-RL",
+      "useful": true,
+      "recommendation": "Recommended after SFT",
+      "best_for": [
+        "Reinforcement learning for tool-use agents",
+        "Reward-based orchestration policy improvement"
+      ],
+      "notes": "Contains tool-use trajectories, tool calls, tool responses, and reward signals."
+    },
+    {
+      "name": "ICIP/LiveMCPBench",
+      "url": "https://huggingface.co/datasets/ICIP/LiveMCPBench",
+      "useful": true,
+      "recommendation": "Highly recommended for evaluation",
+      "best_for": [
+        "MCP tool navigation benchmark",
+        "Quality of MCP tool selection",
+        "Agent evaluation in tool-rich environments"
+      ],
+      "notes": "Benchmark includes real-world MCP tasks, MCP servers, and many tools for evaluating agents."
+    },
+    {
+      "name": "ScaleAI/lhaw",
+      "url": "https://huggingface.co/datasets/ScaleAI/lhaw",
+      "useful": true,
+      "recommendation": "Recommended for benchmark/testing",
+      "best_for": [
+        "Long-horizon workflow testing",
+        "Ambiguous and underspecified task handling",
+        "Planner Agent and HITL logic"
+      ],
+      "notes": "LHAW transforms well-specified tasks into underspecified variants across goals, constraints, inputs, and context."
+    },
+    {
+      "name": "Bordair/bordair-multimodal",
+      "url": "https://huggingface.co/datasets/Bordair/bordair-multimodal",
+      "useful": true,
+      "recommendation": "Recommended for guardrails, not main orchestration training",
+      "best_for": [
+        "Prompt injection detection",
+        "Security testing",
+        "Multimodal safety guardrails"
+      ],
+      "notes": "Useful before enabling MCP tools, file writes, browser automation, or GitHub actions."
+    },
+    {
+      "name": "EtaYang10th/Open-M3-Bench",
+      "url": "https://huggingface.co/datasets/EtaYang10th/Open-M3-Bench",
+      "useful": "partly",
+      "recommendation": "Use only if adding multimodal/image agents",
+      "best_for": [
+        "Multimodal MCP benchmark",
+        "Image-aware agent evaluation"
+      ],
+      "notes": "Less important for current text/code/tool orchestration unless vision agents are added."
+    },
+    {
+      "name": "MAI-UI Technical Report",
+      "url": "https://paperswithcode.co/paper/2512.22047",
+      "useful": "partly",
+      "recommendation": "Use as architecture reference, not as a dataset",
+      "best_for": [
+        "GUI agent architecture",
+        "MCP plus GUI tool-use design",
+        "Device-cloud collaboration ideas"
+      ],
+      "notes": "A model/system definition paper rather than a direct dataset for this project."
+    }
+  ],
+  "recommended_dataset_order": [
+    {
+      "phase": 1,
+      "name": "SFT",
+      "dataset": "LARK-Lab/EnvFactory-SFT-FILTERED",
+      "goal": "Train tool-use and MCP-call behavior."
+    },
+    {
+      "phase": 2,
+      "name": "Evaluation",
+      "datasets": ["ICIP/LiveMCPBench", "ScaleAI/lhaw"],
+      "goal": "Test MCP navigation, long-horizon workflows, and underspecified tasks."
+    },
+    {
+      "phase": 3,
+      "name": "Safety",
+      "dataset": "Bordair/bordair-multimodal",
+      "goal": "Evaluate and train prompt injection guardrails."
+    },
+    {
+      "phase": 4,
+      "name": "RL",
+      "dataset": "LARK-Lab/EnvFactory-RL",
+      "goal": "Optimize orchestration decisions using reward signals."
+    },
+    {
+      "phase": 5,
+      "name": "Optional Multimodal",
+      "dataset": "EtaYang10th/Open-M3-Bench",
+      "goal": "Use only if the project adds image or multimodal agents."
+    }
+  ],
+  "most_recommended_datasets": [
+    "LARK-Lab/EnvFactory-SFT-FILTERED",
+    "ICIP/LiveMCPBench",
+    "ScaleAI/lhaw",
+    "Bordair/bordair-multimodal",
+    "LARK-Lab/EnvFactory-RL"
+  ],
+  "suggested_training_pipeline": [
+    "Create run logs from PrismSpace/Hive: objective, selected agents, selected tools, provider/model, max_agents, latency, token cost, errors, user approvals, final result.",
+    "Fine-tune or train a lightweight tool-use/router model using EnvFactory-SFT-FILTERED.",
+    "Evaluate MCP navigation using LiveMCPBench.",
+    "Evaluate ambiguity handling using ScaleAI/lhaw.",
+    "Add prompt-injection guardrails using Bordair multimodal.",
+    "Use EnvFactory-RL only after SFT and telemetry are stable.",
+    "Store orchestration thresholds and policy in orchestration_policy.json.",
+    "Deploy lightweight .joblib routers first, then add .safetensors reward or neural routing models later."
+  ],
+  "high_level_architecture": {
+    "pipeline": [
+      "User objective",
+      "Intent classifier",
+      "Agent/tool router",
+      "Model/provider router",
+      "DAG planner",
+      "Execution",
+      "Validation scorer",
+      "Human approval predictor",
+      "Feedback/reward logging"
+    ],
+    "recommended_first_build": [
+      "Embedding similarity plus rules for routing",
+      "XGBoost or LightGBM for success prediction and cost prediction",
+      "Contextual bandit for model/provider routing",
+      "GraphRAG or hybrid retrieval for memory",
+      "Reward model later after collecting human feedback"
+    ]
+  },
+  "source_links": [
+    {
+      "name": "RouteLLM",
+      "url": "https://arxiv.org/abs/2406.18665"
+    },
+    {
+      "name": "Hybrid LLM",
+      "url": "https://arxiv.org/abs/2404.14618"
+    },
+    {
+      "name": "LLMCompiler",
+      "url": "https://arxiv.org/abs/2312.04511"
+    },
+    {
+      "name": "Self-Discover",
+      "url": "https://arxiv.org/abs/2402.03620"
+    },
+    {
+      "name": "Mixture-of-Agents",
+      "url": "https://arxiv.org/abs/2406.04692"
+    },
+    {
+      "name": "ORPO",
+      "url": "https://arxiv.org/abs/2403.07691"
+    },
+    {
+      "name": "KTO",
+      "url": "https://arxiv.org/abs/2402.01306"
+    },
+    {
+      "name": "SimPO",
+      "url": "https://arxiv.org/abs/2405.14734"
+    },
+    {
+      "name": "GraphRAG",
+      "url": "https://arxiv.org/abs/2408.08921"
+    },
+    {
+      "name": "EnvFactory-SFT-FILTERED",
+      "url": "https://huggingface.co/datasets/LARK-Lab/EnvFactory-SFT-FILTERED"
+    },
+    {
+      "name": "EnvFactory-RL",
+      "url": "https://huggingface.co/datasets/LARK-Lab/EnvFactory-RL"
+    },
+    {
+      "name": "LiveMCPBench",
+      "url": "https://huggingface.co/datasets/ICIP/LiveMCPBench"
+    },
+    {
+      "name": "ScaleAI/lhaw",
+      "url": "https://huggingface.co/datasets/ScaleAI/lhaw"
+    },
+    {
+      "name": "Bordair multimodal prompt injection dataset",
+      "url": "https://huggingface.co/datasets/Bordair/bordair-multimodal"
+    },
+    {
+      "name": "Open-M3-Bench",
+      "url": "https://huggingface.co/datasets/EtaYang10th/Open-M3-Bench"
+    },
+    {
+      "name": "MAI-UI Technical Report",
+      "url": "https://paperswithcode.co/paper/2512.22047"
+    }
+  ]
+}

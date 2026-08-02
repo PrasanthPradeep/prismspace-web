@@ -15,9 +15,12 @@ Requires: fastapi, uvicorn, hive (from aden-hive/hive clone)
 from __future__ import annotations
 
 import asyncio
+import glob
 import json
 import os
+import pathlib
 import re
+import sqlite3
 import time
 import uuid
 from datetime import datetime
@@ -63,6 +66,9 @@ _logs: dict[str, list[str]] = {}
 TOOLS_DIR = os.path.join(os.path.dirname(__file__), "hive", "tools")
 MCP_SERVERS_PATH = os.path.join(TOOLS_DIR, "mcp_servers.json")
 TOOLS_ENV_PATH = os.path.join(TOOLS_DIR, ".env")
+
+# Workspace root: parent of the hive-backend directory (i.e. prismspace-web/)
+WORKSPACE_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # ---------------------------------------------------------------------------
 # Pydantic models
@@ -282,6 +288,43 @@ def _build_system_prompt() -> str:
                 elif name == "hive_tools":
                     base += "\n**Hive Tools MCP is ACTIVE**\n"
                     base += "You can use: web_search, web_scrape, send_email, and data tools.\n"
+                elif name == "filesystem":
+                    base += "\n**Filesystem MCP is ACTIVE**\n"
+                    base += "You have full read/write access to local files via these tools:\n"
+                    base += "- `read_file(path)` — Read the full contents of any file\n"
+                    base += "- `write_file(path, content)` — Create or overwrite a file with new content\n"
+                    base += "- `search_files(pattern, target)` — Search for text patterns in files (grep) or find files by name (find/ls)\n"
+                    base += "  - `target='content'` — grep-style content search\n"
+                    base += "  - `target='files'` — filename/path search\n"
+                    base += "- `edit_file(path, mode, ...)` — Modify existing files:\n"
+                    base += "  - `mode='replace'` — fuzzy find/replace in a single file\n"
+                    base += "  - `mode='patch'` — apply structured multi-file patches\n"
+                    base += "\nUse the Filesystem Agent to read project files, generate code, apply edits, "
+                    base += "organize directories, and inspect file structures without leaving the agent run.\n"
+                elif name == "sqlite":
+                    sqlite_db = resolved_env.get("SQLITE_DB_PATH", "✗ NOT SET")
+                    base += f"\n**SQLite MCP is ACTIVE** (Database: {sqlite_db})\n"
+                    base += "You can query and manage the configured SQLite database via these tools:\n"
+                    base += "- `read_query(sql)` — Execute a SELECT query and return results as JSON rows\n"
+                    base += "- `write_query(sql)` — Execute INSERT, UPDATE, DELETE, or DDL statements\n"
+                    base += "- `list_tables()` — List all tables in the database\n"
+                    base += "- `describe_table(table)` — Return column names, types, and constraints for a table\n"
+                    base += "- `create_table(sql)` — Create a new table with a CREATE TABLE statement\n"
+                    base += "\nUse the Database Agent with these tools to store agent results, query structured data, "
+                    base += "build schemas, and persist information across sessions.\n"
+                elif name == "memory":
+                    base += "\n**Memory MCP is ACTIVE**\n"
+                    base += "You have access to a persistent key-value memory store that survives across sessions:\n"
+                    base += "- `set_memory(key, value)` — Store a value under a named key (overwrites if exists)\n"
+                    base += "- `get_memory(key)` — Retrieve the value stored under a key\n"
+                    base += "- `list_memory()` — List all stored memory keys\n"
+                    base += "- `delete_memory(key)` — Remove a stored memory entry\n"
+                    base += "\nUse the Memory Agent to:\n"
+                    base += "- Remember user preferences, project context, and past decisions\n"
+                    base += "- Store intermediate results between agent runs\n"
+                    base += "- Maintain a knowledge base that grows over time\n"
+                    base += "- Recall facts without re-fetching them from external sources\n"
+
 
                 base += "\n"
 
@@ -408,6 +451,283 @@ async def _call_nvidia(model: str, objective: str, chat_history: list[ChatContex
 
 
 # ---------------------------------------------------------------------------
+# Tool execution engine — parse & run MCP tool calls from LLM responses
+# ---------------------------------------------------------------------------
+
+_TOOL_CALL_RE = re.compile(
+    r'```(?:json)?\s*(\{.*?\})\s*```|({\s*"tool"\s*:\s*"[^"]+".*?})',
+    re.DOTALL,
+)
+
+
+def _parse_tool_calls(text: str) -> list[dict]:
+    """Extract tool-call JSON objects from an LLM response."""
+    calls: list[dict] = []
+    seen: set[str] = set()
+
+    # Strategy 1: fenced code blocks
+    for m in re.finditer(r'```(?:json)?\s*([\s\S]*?)```', text):
+        raw = m.group(1).strip()
+        try:
+            obj = json.loads(raw)
+            if isinstance(obj, dict) and "tool" in obj:
+                key = json.dumps(obj, sort_keys=True)
+                if key not in seen:
+                    seen.add(key)
+                    calls.append(obj)
+        except json.JSONDecodeError:
+            pass
+
+    # Strategy 2: bare JSON objects anywhere in the text
+    if not calls:
+        for m in re.finditer(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', text, re.DOTALL):
+            try:
+                obj = json.loads(m.group())
+                if isinstance(obj, dict) and "tool" in obj and "arguments" in obj:
+                    key = json.dumps(obj, sort_keys=True)
+                    if key not in seen:
+                        seen.add(key)
+                        calls.append(obj)
+            except json.JSONDecodeError:
+                pass
+
+    return calls
+
+
+def _exec_search_files(args: dict) -> str:
+    """Execute search_files tool: find files by name pattern or grep content."""
+    pattern = args.get("pattern", "*")
+    target = args.get("target", "files")
+    search_path = args.get("path", None)
+    root = pathlib.Path(search_path) if search_path else pathlib.Path(WORKSPACE_ROOT)
+
+    if target == "files":
+        matches = sorted(root.rglob(pattern))
+        files = [
+            str(m.relative_to(root))
+            for m in matches
+            if m.is_file() and ".git" not in m.parts and "node_modules" not in m.parts
+               and ".next" not in m.parts and ".venv" not in m.parts
+        ]
+        listing = "\n".join(files[:200])
+        extra = f"\n... ({len(files) - 200} more not shown)" if len(files) > 200 else ""
+        return f"Found {len(files)} file(s) matching '{pattern}' under '{root}':\n{listing}{extra}"
+
+    # target == 'content' — grep
+    results: list[str] = []
+    for f in root.rglob("*"):
+        if not f.is_file():
+            continue
+        if any(p in f.parts for p in (".git", "node_modules", ".next", ".venv")):
+            continue
+        try:
+            text = f.read_text(encoding="utf-8", errors="ignore")
+            if pattern in text:
+                results.append(str(f.relative_to(root)))
+        except OSError:
+            pass
+    listing = "\n".join(results[:200])
+    return f"Found '{pattern}' in {len(results)} file(s):\n{listing}"
+
+
+def _exec_read_file(args: dict) -> str:
+    """Execute read_file tool."""
+    raw_path = args.get("path", "")
+    p = pathlib.Path(raw_path)
+    if not p.is_absolute():
+        p = pathlib.Path(WORKSPACE_ROOT) / p
+    try:
+        content = p.read_text(encoding="utf-8", errors="ignore")
+        lines = content.splitlines()
+        preview = "\n".join(lines[:300])
+        tail = f"\n... ({len(lines) - 300} more lines)" if len(lines) > 300 else ""
+        return f"--- {p} ({len(lines)} lines) ---\n{preview}{tail}"
+    except OSError as exc:
+        return f"Error reading '{p}': {exc}"
+
+
+def _exec_write_file(args: dict) -> str:
+    """Execute write_file tool."""
+    raw_path = args.get("path", "")
+    content = args.get("content", "")
+    p = pathlib.Path(raw_path)
+    if not p.is_absolute():
+        p = pathlib.Path(WORKSPACE_ROOT) / p
+    try:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(content, encoding="utf-8")
+        return f"Successfully wrote {len(content)} chars to '{p}'"
+    except OSError as exc:
+        return f"Error writing '{p}': {exc}"
+
+
+def _exec_sqlite(args: dict, operation: str) -> str:
+    """Execute sqlite read_query / write_query / list_tables / describe_table / create_table."""
+    tools_env = _load_tools_env()
+    db_path = tools_env.get("SQLITE_DB_PATH") or os.environ.get("SQLITE_DB_PATH", "./prismspace.db")
+    if not pathlib.Path(db_path).is_absolute():
+        db_path = str(pathlib.Path(WORKSPACE_ROOT) / db_path)
+
+    try:
+        con = sqlite3.connect(db_path)
+        cur = con.cursor()
+
+        if operation == "list_tables":
+            cur.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+            tables = [row[0] for row in cur.fetchall()]
+            return f"Tables in '{db_path}':\n" + ("\n".join(tables) if tables else "(empty database)")
+
+        if operation == "describe_table":
+            table = args.get("table", "")
+            cur.execute(f"PRAGMA table_info({table})")
+            rows = cur.fetchall()
+            header = "cid | name | type | notnull | dflt_value | pk"
+            body = "\n".join(" | ".join(str(c) for c in row) for row in rows)
+            return f"Schema for '{table}':\n{header}\n{body}"
+
+        sql = args.get("sql", args.get("query", ""))
+        if not sql:
+            return "Error: no SQL provided"
+
+        cur.execute(sql)
+        if operation in ("write_query", "create_table"):
+            con.commit()
+            return f"OK — {cur.rowcount} row(s) affected."
+
+        # read_query
+        rows = cur.fetchall()
+        if not rows:
+            return "Query returned 0 rows."
+        cols = [d[0] for d in (cur.description or [])]
+        records = [dict(zip(cols, row)) for row in rows[:100]]
+        extra = f"\n... ({len(rows) - 100} more rows)" if len(rows) > 100 else ""
+        return json.dumps(records, indent=2, default=str) + extra
+
+    except sqlite3.Error as exc:
+        return f"SQLite error: {exc}"
+    finally:
+        try:
+            con.close()
+        except Exception:
+            pass
+
+
+# Simple in-process memory store (persists for the lifetime of the backend process)
+_memory_store: dict[str, str] = {}
+
+
+def _exec_memory(args: dict, operation: str) -> str:
+    """Execute memory set/get/list/delete operations."""
+    if operation == "set_memory":
+        key = args.get("key", "")
+        value = args.get("value", "")
+        _memory_store[key] = str(value)
+        return f"Memory set: '{key}' = '{value}'"
+    elif operation == "get_memory":
+        key = args.get("key", "")
+        val = _memory_store.get(key)
+        return f"Memory '{key}': {val}" if val is not None else f"Key '{key}' not found in memory."
+    elif operation == "list_memory":
+        if not _memory_store:
+            return "Memory store is empty."
+        return "Memory store keys:\n" + "\n".join(f"  {k}: {v}" for k, v in _memory_store.items())
+    elif operation == "delete_memory":
+        key = args.get("key", "")
+        removed = _memory_store.pop(key, None)
+        return f"Deleted '{key}'." if removed is not None else f"Key '{key}' not found."
+    return f"Unknown memory operation: {operation}"
+
+
+def _dispatch_tool(tool_call: dict) -> str:
+    """Dispatch a parsed tool call to the correct executor."""
+    tool = tool_call.get("tool", "").lower()
+    args = tool_call.get("arguments", {})
+
+    # Filesystem tools
+    if tool == "search_files":
+        return _exec_search_files(args)
+    if tool == "read_file":
+        return _exec_read_file(args)
+    if tool == "write_file":
+        return _exec_write_file(args)
+    if tool == "edit_file":
+        # Basic: treat as read + write
+        return "edit_file: use read_file then write_file for now — direct patch execution coming soon."
+
+    # SQLite tools
+    if tool in ("read_query", "write_query", "create_table", "list_tables", "describe_table"):
+        return _exec_sqlite(args, tool)
+
+    # Memory tools
+    if tool in ("set_memory", "get_memory", "list_memory", "delete_memory"):
+        return _exec_memory(args, tool)
+
+    return (
+        f"Tool '{tool}' was recognised but has no local executor. "
+        "It will be handled by the MCP server process when integrated."
+    )
+
+
+async def _tool_use_loop(
+    agent_id: str,
+    initial_response: str,
+    request: "CreateAgentRequest",
+) -> str:
+    """
+    If the LLM response contains tool calls, execute them and call the LLM
+    a second time to synthesise a final answer from the real results.
+    Returns the final answer string.
+    """
+    tool_calls = _parse_tool_calls(initial_response)
+    if not tool_calls:
+        return initial_response  # No tools detected — return as-is
+
+    _log(agent_id, f"🔧 Detected {len(tool_calls)} tool call(s) — executing...")
+
+    tool_results: list[str] = []
+    for tc in tool_calls:
+        tool_name = tc.get("tool", "unknown")
+        tool_args = tc.get("arguments", {})
+        _log(agent_id, f"   → Calling `{tool_name}` with args: {json.dumps(tool_args)}")
+        result = _dispatch_tool(tc)
+        preview = result[:200].replace("\n", " ")
+        _log(agent_id, f"   ✓ `{tool_name}` returned {len(result)} chars: {preview}...")
+        tool_results.append(
+            f"=== Tool: {tool_name} ===\n"
+            f"Arguments: {json.dumps(tool_args, indent=2)}\n"
+            f"Result:\n{result}"
+        )
+
+    # Build a synthesis prompt and call the LLM again
+    synthesis_objective = (
+        f"You were asked: {request.objective}\n\n"
+        f"You called {len(tool_calls)} tool(s). Here are the real results:\n\n"
+        + "\n\n".join(tool_results)
+        + "\n\nUsing ONLY the tool results above, provide a complete, "
+          "accurate, and well-formatted final answer to the user's question. "
+          "Do NOT output more tool calls — synthesise from the data you have."
+    )
+
+    _log(agent_id, f"📝 Synthesising final answer from {len(tool_calls)} tool result(s)...")
+
+    provider = request.provider.lower()
+    if provider == "groq":
+        final = await _call_groq(request.model, synthesis_objective, [])
+    elif provider == "nvidia":
+        final = await _call_nvidia(request.model, synthesis_objective, [])
+    elif provider == "openai":
+        final = await _call_openai(request.model, synthesis_objective, [])
+    elif provider == "anthropic":
+        final = await _call_anthropic(request.model, synthesis_objective, [])
+    elif provider == "google":
+        final = await _call_google(request.model, synthesis_objective, [])
+    else:
+        final = initial_response  # fallback
+
+    return final
+
+
+# ---------------------------------------------------------------------------
 # Background task: real LLM-powered agent run
 # ---------------------------------------------------------------------------
 
@@ -479,6 +799,10 @@ async def _run_hive_agent(agent_id: str, request: CreateAgentRequest) -> None:
             raise ValueError(f"Unsupported provider: {request.provider}")
 
         _log(agent_id, f"Received response from {request.provider} ({len(result_text)} chars)")
+
+        # --- Tool-use loop: execute any MCP tool calls and synthesise ---
+        result_text = await _tool_use_loop(agent_id, result_text, request)
+
         _log(agent_id, "Running validation checks...")
         await asyncio.sleep(0.3)
 

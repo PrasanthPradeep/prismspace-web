@@ -1,0 +1,930 @@
+{
+  "document": {
+    "name": "PrismSpace Agent Swarm Architecture",
+    "purpose": "Explain the project architecture with exclusive focus on Multi Agent Orchestration through the Agent Swarm tool.",
+    "source_file": "agent-orchestration-ml-chat.json",
+    "redaction_policy": {
+      "redacted_name": "[REDACTED]",
+      "rule": "The requested product/runtime name is omitted from this document. Backend paths and environment keys that contain that name are represented with neutral aliases."
+    },
+    "scope": {
+      "included": [
+        "Agent Swarm user interface",
+        "Next.js Agent Swarm API proxy",
+        "Python multi-agent backend bridge",
+        "Agent run lifecycle",
+        "Model/provider routing",
+        "Human-in-the-loop approval",
+        "MCP credential and server awareness",
+        "Telemetry, logs, evaluation, and training direction for orchestration"
+      ],
+      "excluded": [
+        "All non-Agent Swarm developer tools",
+        "Dev Space utility panels",
+        "Static productivity tools",
+        "Unrelated conversion and checklist documentation"
+      ]
+    }
+  },
+  "project": {
+    "name": "PrismSpace Multi Agent Orchestration",
+    "focus": "Agent Swarm is the primary project surface for launching, monitoring, routing, validating, and improving multi-agent workflows.",
+    "workspace": "C:\\Users\\nobin\\OneDrive\\Documents\\Projects\\prismspace-web",
+    "architecture_style": "Next.js frontend plus API proxy plus local Python orchestration backend",
+    "primary_capability": "Convert a user objective into a managed agent run with configurable model routing, worker count, approval checkpoints, live logs, and final synthesis."
+  },
+  "project_description": {
+    "one_line_summary": "PrismSpace is a local AI workspace whose central architecture focus is Agent Swarm: a Multi Agent Orchestration system that turns user objectives into observable, approval-aware, model-routed agent runs.",
+    "full_description": "The project combines a modern browser-based React interface with a local Python backend bridge so a user can launch multi-agent work from the PrismSpace UI, choose a model provider, limit worker count, decide whether a human checkpoint is required, watch execution logs in real time, approve or reject paused work, and inspect the final synthesized answer. The Agent Swarm feature is not treated as a generic utility panel; it is the orchestration layer of the application and the part of the system intended to coordinate planning, routing, tool awareness, execution, validation, and feedback collection.",
+    "product_identity": {
+      "product_name": "PrismSpace",
+      "orchestration_surface": "Agent Swarm",
+      "primary_theme": "Multi Agent Orchestration",
+      "intended_runtime": "Local-first development environment with browser UI and local backend service",
+      "target_user": "A developer, researcher, designer, or technical operator who wants to delegate complex objectives to a coordinated set of AI agents while still being able to inspect, approve, and control the run.",
+      "core_value": "Make autonomous AI work visible, configurable, and controllable instead of sending a prompt into a black box."
+    },
+    "what_the_project_does": [
+      "Accepts natural-language objectives from the user.",
+      "Routes those objectives into the Agent Swarm launch flow.",
+      "Creates a tracked agent run with a unique id.",
+      "Stores run metadata including objective, model, provider, worker count, approval state, status, timestamps, and result.",
+      "Builds a system prompt that frames the selected model as a multi-agent coordinator.",
+      "Injects live MCP server and credential awareness into the orchestration context when available.",
+      "Simulates and logs the planning and worker-spawn stages of a multi-agent run.",
+      "Pauses for human approval when human-in-the-loop mode is enabled.",
+      "Calls the selected provider/model after planning and approval requirements are satisfied.",
+      "Streams logs back to the UI through Server-Sent Events.",
+      "Stores the final response on the agent run object.",
+      "Lets the user review historical and active runs.",
+      "Lets the user delete run records from the current backend registry.",
+      "Exposes masked MCP credential state and lets users save or remove tokens for orchestration tools."
+    ],
+    "what_the_project_is_not": [
+      "It is not documented here as a general collection of developer tools.",
+      "It is not focused here on unrelated productivity widgets, static tools, or dashboard customization features.",
+      "It is not a replacement for individual LLM providers; it is an orchestration layer above them.",
+      "It is not yet a fully persistent production agent platform because current run state is held in memory."
+    ],
+    "technology_stack": {
+      "frontend": {
+        "framework": "Next.js",
+        "package_version_observed": "16.2.10",
+        "ui_library": "React 19",
+        "language": "TypeScript",
+        "styling": "Tailwind CSS with component-level React UI",
+        "important_dependencies": [
+          "@base-ui/react",
+          "framer-motion",
+          "gsap",
+          "lucide-react",
+          "react-hot-toast",
+          "react-rnd",
+          "tailwind-merge"
+        ]
+      },
+      "backend": {
+        "language": "Python",
+        "framework": "FastAPI",
+        "server": "uvicorn",
+        "streaming": "Server-Sent Events through FastAPI StreamingResponse",
+        "state_management": "In-memory dictionaries for agent state and logs",
+        "configuration": "Environment variables and local MCP server configuration files"
+      },
+      "model_providers": {
+        "backend_handlers": [
+          "Groq",
+          "NVIDIA",
+          "OpenAI",
+          "Anthropic",
+          "Google Gemini"
+        ],
+        "selection_pattern": "The user selects provider and model in the UI; the backend dispatches to the matching async provider helper."
+      },
+      "tool_awareness": {
+        "protocol": "MCP",
+        "purpose": "Expose configured tool servers and credentials to the orchestration prompt so Agent Swarm can reason about tool availability.",
+        "credential_handling": "Tokens are stored locally, masked in UI responses, and referenced by environment variable keys."
+      }
+    },
+    "runtime_topology": {
+      "browser": "The user interacts with the Agent Swarm panel inside the Next.js app.",
+      "next_app": "The Next.js application renders the UI and exposes same-origin API routes under /api/agent-swarm.",
+      "api_proxy": "The Next.js API routes forward CRUD, health, approval, MCP, and SSE requests to the local Python backend.",
+      "python_backend": "The FastAPI service owns run state, log state, provider dispatch, MCP config loading, token update operations, and the background run lifecycle.",
+      "llm_provider": "The selected external model provider receives the orchestration system prompt, compact chat history, and user objective.",
+      "mcp_config": "Local MCP server definitions and token status are loaded into backend context and optionally surfaced to the UI."
+    },
+    "major_user_journeys": [
+      {
+        "journey": "Launch an orchestration run",
+        "steps": [
+          "Open Agent Swarm.",
+          "Enter or receive a natural-language objective.",
+          "Select provider and model.",
+          "Choose worker count.",
+          "Enable or disable human checkpointing.",
+          "Submit the run.",
+          "Watch the run move from initialising to planning, running, and completed."
+        ]
+      },
+      {
+        "journey": "Approve a human-in-the-loop run",
+        "steps": [
+          "Submit a run with human checkpoint enabled.",
+          "Wait for the backend to enter awaiting_approval.",
+          "Inspect logs and intent.",
+          "Approve to resume or reject to cancel.",
+          "Continue watching logs until a terminal state is reached."
+        ]
+      },
+      {
+        "journey": "Inspect a previous run",
+        "steps": [
+          "Open the Agent Swarm chat/run list.",
+          "Select an existing run.",
+          "Review objective, provider, model, status, logs, DAG view, and output.",
+          "Delete the run if it is no longer needed."
+        ]
+      },
+      {
+        "journey": "Configure MCP access",
+        "steps": [
+          "Open the MCP tab.",
+          "Refresh configured MCP servers.",
+          "Select a server or token key.",
+          "Save a local credential value.",
+          "Confirm that the UI reports the token as configured without exposing the raw secret."
+        ]
+      }
+    ],
+    "domain_model": {
+      "agent_run": {
+        "description": "The core unit of work in Agent Swarm.",
+        "fields": {
+          "id": "Unique identifier generated by the backend.",
+          "objective": "The user's requested goal.",
+          "model": "The model selected for execution.",
+          "provider": "The selected model provider.",
+          "max_agents": "The requested number of specialized workers.",
+          "human_in_loop": "Whether approval is required before final execution.",
+          "status": "Current lifecycle state.",
+          "created_at": "Creation timestamp.",
+          "updated_at": "Last update timestamp.",
+          "result": "Final provider response or error text.",
+          "approved": "Null before decision, true after approval, false after rejection."
+        }
+      },
+      "log_entry": {
+        "description": "Timestamped text emitted by the backend to explain run progress.",
+        "examples": [
+          "Initialising runtime",
+          "Compiling execution DAG",
+          "Spawning specialized sub-agents",
+          "Waiting for approval",
+          "Sending prompt to provider/model",
+          "Running validation checks",
+          "Task completed successfully"
+        ]
+      },
+      "mcp_server": {
+        "description": "A configured external tool server that can be described to the orchestration prompt.",
+        "fields": [
+          "name",
+          "transport",
+          "command",
+          "args",
+          "description",
+          "env"
+        ]
+      },
+      "mcp_token": {
+        "description": "A local environment-backed credential used by one or more MCP servers.",
+        "fields": [
+          "key",
+          "configured",
+          "masked",
+          "used_by"
+        ]
+      }
+    },
+    "file_map": {
+      "agent_swarm_architecture_document": "agent-swarm-architecture.json",
+      "source_orchestration_notes": "agent-orchestration-ml-chat.json",
+      "agent_swarm_ui": "components/AgentSwarm.tsx",
+      "agent_swarm_client": "lib/agent-swarm-client.ts",
+      "main_page_entry": "app/page.tsx",
+      "search_bar_entry": "components/SearchBar.tsx",
+      "main_container_entry": "components/MainContainer.tsx",
+      "next_proxy_routes": "app/api/agent-swarm/**/route.ts",
+      "backend_bridge_alias": "[REDACTED]-backend/[REDACTED]_api.py",
+      "backend_start_script_alias": "[REDACTED]-backend/start.ps1",
+      "mcp_servers_alias": "[REDACTED]-backend/runtime-tools/mcp_servers.json",
+      "mcp_tokens_alias": "[REDACTED]-backend/runtime-tools/.env",
+      "package_manifest": "package.json"
+    },
+    "operational_details": {
+      "frontend_dev_command": "npm run dev",
+      "frontend_default_url": "http://localhost:3000",
+      "backend_default_url": "http://localhost:7433",
+      "backend_url_configuration": "The Next.js proxy reads a backend URL environment variable and falls back to localhost:7433.",
+      "health_check": "GET /api/agent-swarm/health proxies to backend GET /health.",
+      "sse_behavior": "The logs route is force-dynamic and forwards text/event-stream responses from the backend.",
+      "run_storage_lifetime": "Runs last only as long as the backend process keeps its in-memory dictionaries.",
+      "approval_timeout": "The backend waits for approval for roughly 300 seconds before failing the run.",
+      "chat_history_limit": "The backend keeps up to the last 16 user/assistant messages and trims each message before provider calls."
+    },
+    "design_principles": [
+      "Keep orchestration observable through live logs and explicit statuses.",
+      "Keep autonomy bounded through provider choice, worker limits, and approval checkpoints.",
+      "Keep tool use grounded by loading real MCP server configuration instead of pretending tools exist.",
+      "Keep provider access replaceable by routing through provider-specific backend helpers.",
+      "Keep the browser client simple by using typed helper functions and same-origin proxy routes.",
+      "Keep future training possible by treating each run as telemetry for intent routing, model routing, validation, and reward learning."
+    ],
+    "current_maturity": {
+      "working_now": [
+        "Agent run creation",
+        "Agent listing",
+        "Agent deletion",
+        "Backend health check",
+        "SSE log streaming",
+        "Human approval and rejection",
+        "Provider dispatch helpers",
+        "MCP server listing",
+        "MCP token save and removal",
+        "Masked token status in UI"
+      ],
+      "partially_implemented": [
+        "DAG planning is represented in logs but not yet as a persisted executable graph.",
+        "Specialized sub-agents are represented in the orchestration prompt and logs but not yet tracked as independent runtime entities.",
+        "Validation is logged but not yet represented as structured pass/fail checks.",
+        "Model routing is user-selected rather than policy-learned.",
+        "Tool routing is prompt-informed by MCP configuration but not yet executed as a structured orchestration graph."
+      ],
+      "future_ready_direction": [
+        "Persistent run database",
+        "Explicit DAG schema",
+        "Per-agent task records",
+        "Structured tool-call traces",
+        "Policy-driven routing",
+        "Reward model training",
+        "Cost and latency prediction",
+        "Richer approval policies",
+        "Production credential management"
+      ]
+    }
+  },
+  "observed_components": {
+    "frontend": {
+      "name": "Agent Swarm dashboard",
+      "file": "components/AgentSwarm.tsx",
+      "responsibilities": [
+        "Collect user objectives",
+        "Select provider and model",
+        "Set bounded worker count",
+        "Enable or disable human checkpointing",
+        "Create agent runs",
+        "List historical and active runs",
+        "Display DAG, logs, and output views",
+        "Stream run logs through Server-Sent Events",
+        "Approve or reject paused runs",
+        "Manage MCP credential status for Agent Swarm integrations",
+        "Show backend health state"
+      ],
+      "user_controls": {
+        "objective": "Natural-language task or orchestration goal.",
+        "provider": "Model provider selected from the Agent Swarm UI.",
+        "model": "Provider-specific model selected from the available model list.",
+        "max_agents": "UI clamps visible worker count between 1 and 3.",
+        "human_in_loop": "When enabled, execution pauses at a checkpoint before final synthesis."
+      },
+      "tabs": [
+        "launch",
+        "chats",
+        "mcp"
+      ],
+      "workspace_views": [
+        "dag",
+        "logs",
+        "output"
+      ]
+    },
+    "search_entrypoint": {
+      "files": [
+        "app/page.tsx",
+        "components/SearchBar.tsx",
+        "components/MainContainer.tsx"
+      ],
+      "responsibilities": [
+        "Allow users to send a query into Agent Swarm from the main experience",
+        "Open the Agent Swarm panel from the main page",
+        "Pass the query into the orchestration launch flow"
+      ]
+    },
+    "typed_client": {
+      "file": "lib/agent-swarm-client.ts",
+      "base_route": "/api/agent-swarm",
+      "responsibilities": [
+        "Expose typed functions for Agent Swarm CRUD operations",
+        "Create agent payloads",
+        "Approve or reject an agent run",
+        "Delete an agent run",
+        "Check backend health",
+        "List, save, and remove MCP tokens",
+        "Open an EventSource stream for run logs",
+        "Normalize status labels and status colors"
+      ],
+      "types": {
+        "AgentStatus": [
+          "initialising",
+          "planning",
+          "running",
+          "awaiting_approval",
+          "completed",
+          "failed",
+          "cancelled"
+        ],
+        "SwarmAgent": [
+          "id",
+          "objective",
+          "model",
+          "provider",
+          "max_agents",
+          "human_in_loop",
+          "status",
+          "created_at",
+          "updated_at",
+          "result",
+          "approved"
+        ],
+        "CreateAgentPayload": [
+          "objective",
+          "model",
+          "provider",
+          "max_agents",
+          "human_in_loop",
+          "chat_history"
+        ]
+      }
+    },
+    "next_api_proxy": {
+      "base_route": "app/api/agent-swarm",
+      "backend_url_env_alias": "AGENT_SWARM_API_URL_ALIAS",
+      "default_backend_url": "http://localhost:7433",
+      "routes": [
+        {
+          "route": "GET /api/agent-swarm/health",
+          "backend_route": "GET /health",
+          "purpose": "Check whether the Agent Swarm backend is reachable."
+        },
+        {
+          "route": "GET /api/agent-swarm/agents",
+          "backend_route": "GET /api/agents",
+          "purpose": "List all agent runs."
+        },
+        {
+          "route": "POST /api/agent-swarm/agents",
+          "backend_route": "POST /api/agents",
+          "purpose": "Create a new agent run."
+        },
+        {
+          "route": "GET /api/agent-swarm/agents/:id",
+          "backend_route": "GET /api/agents/:id",
+          "purpose": "Fetch one agent run."
+        },
+        {
+          "route": "DELETE /api/agent-swarm/agents/:id",
+          "backend_route": "DELETE /api/agents/:id",
+          "purpose": "Remove an agent run from the registry."
+        },
+        {
+          "route": "POST /api/agent-swarm/agents/:id/approve",
+          "backend_route": "POST /api/agents/:id/approve",
+          "purpose": "Approve or reject a run at the human checkpoint."
+        },
+        {
+          "route": "GET /api/agent-swarm/agents/:id/logs",
+          "backend_route": "GET /api/agents/:id/logs",
+          "purpose": "Proxy the backend Server-Sent Events log stream."
+        },
+        {
+          "route": "GET /api/agent-swarm/mcp",
+          "backend_route": "GET /api/mcp",
+          "purpose": "List configured MCP servers and masked token status."
+        },
+        {
+          "route": "POST /api/agent-swarm/mcp",
+          "backend_route": "POST /api/mcp/tokens",
+          "purpose": "Save or update an MCP token."
+        },
+        {
+          "route": "DELETE /api/agent-swarm/mcp",
+          "backend_route": "DELETE /api/mcp/tokens",
+          "purpose": "Remove an MCP token."
+        }
+      ],
+      "reason_for_proxy": [
+        "Keep the browser pointed at same-origin Next.js routes",
+        "Avoid exposing backend port details directly to UI code",
+        "Centralize backend-unavailable errors",
+        "Preserve SSE streaming for live logs"
+      ]
+    },
+    "backend_bridge": {
+      "name": "Agent Swarm backend bridge",
+      "file_alias": "[REDACTED]-backend/[REDACTED]_api.py",
+      "actual_role": "FastAPI service that stores run state, emits logs, handles approvals, builds orchestration prompts, and calls selected LLM providers.",
+      "port": 7433,
+      "framework": "FastAPI",
+      "middleware": [
+        "CORS for local Next.js origins",
+        "StreamingResponse for SSE logs"
+      ],
+      "state": {
+        "agents": "In-memory dictionary keyed by agent id.",
+        "logs": "In-memory list of timestamped log lines keyed by agent id.",
+        "production_note": "The current store is volatile and should be replaced with persistent storage for production runs."
+      },
+      "request_models": {
+        "CreateAgentRequest": [
+          "objective",
+          "model",
+          "provider",
+          "max_agents",
+          "human_in_loop",
+          "chat_history"
+        ],
+        "ApproveAgentRequest": [
+          "approved",
+          "message"
+        ],
+        "McpTokenRequest": [
+          "server_name",
+          "env_key",
+          "token"
+        ],
+        "McpTokenRemoveRequest": [
+          "server_name",
+          "env_key"
+        ]
+      },
+      "provider_handlers": [
+        "groq",
+        "nvidia",
+        "openai",
+        "anthropic",
+        "google"
+      ],
+      "backend_defaults": {
+        "model": "z-ai/glm-5.2",
+        "provider": "nvidia",
+        "max_agents": 3,
+        "human_in_loop": true
+      }
+    }
+  },
+  "agent_run_lifecycle": {
+    "status_flow": [
+      {
+        "status": "initialising",
+        "meaning": "The run has been created and queued as a background task."
+      },
+      {
+        "status": "planning",
+        "meaning": "The backend logs DAG compilation and prepares specialized workers."
+      },
+      {
+        "status": "awaiting_approval",
+        "meaning": "If human-in-the-loop is enabled, the run pauses until an operator approves or rejects it."
+      },
+      {
+        "status": "running",
+        "meaning": "The backend sends the objective, compact chat history, and orchestration system prompt to the selected provider/model."
+      },
+      {
+        "status": "completed",
+        "meaning": "The model response has been received, validation logs have been emitted, and the final result is stored."
+      },
+      {
+        "status": "failed",
+        "meaning": "The run raised an error, timed out at approval, or hit an unsupported provider."
+      },
+      {
+        "status": "cancelled",
+        "meaning": "The operator rejected the run at the approval checkpoint."
+      }
+    ],
+    "happy_path": [
+      "User submits objective in Agent Swarm",
+      "UI builds CreateAgentPayload with objective, provider, model, max_agents, human_in_loop, and chat_history",
+      "Typed client sends POST /api/agent-swarm/agents",
+      "Next.js proxy forwards to backend POST /api/agents",
+      "Backend creates an agent id and stores initial state",
+      "Backend starts a background run task",
+      "UI selects the new agent and subscribes to GET /api/agent-swarm/agents/:id/logs",
+      "Backend emits planning, worker, approval, provider call, validation, and completion logs",
+      "UI updates logs and final output as the run reaches a terminal state"
+    ],
+    "human_checkpoint": {
+      "enabled_by": "human_in_loop",
+      "backend_behavior": [
+        "Set run status to awaiting_approval",
+        "Wait up to roughly 300 seconds for approval state",
+        "Resume if approved",
+        "Cancel if rejected",
+        "Fail if approval times out"
+      ],
+      "ui_behavior": [
+        "Expose approve/reject controls for paused runs",
+        "POST decision to /api/agent-swarm/agents/:id/approve",
+        "Continue streaming logs after decision"
+      ]
+    },
+    "log_streaming": {
+      "transport": "Server-Sent Events",
+      "client": "EventSource",
+      "frame_shape": {
+        "line": "string log entry",
+        "index": "zero-based log index",
+        "done": "boolean terminal marker"
+      },
+      "poll_interval_seconds": 0.5
+    }
+  },
+  "orchestration_prompt": {
+    "purpose": "Give the selected LLM a structured role as an autonomous multi-agent coordinator.",
+    "major_sections": [
+      "Core objectives",
+      "Reasoning strategy",
+      "Active specialized sub-agents",
+      "MCP policy",
+      "Coding rules",
+      "Response guidelines",
+      "Fallback behavior",
+      "Initialized MCP tool server context when configured"
+    ],
+    "specialized_agents": [
+      "Planner Agent",
+      "Reasoning Agent",
+      "Tool Selection Agent",
+      "Code Agent",
+      "Figma Agent",
+      "GitHub Agent",
+      "Filesystem Agent",
+      "Browser Agent",
+      "Database Agent",
+      "Memory Agent",
+      "Research Agent",
+      "Validation Agent"
+    ],
+    "policy_summary": [
+      "Understand intent before acting",
+      "Plan before execution",
+      "Prefer real tool calls over guessing when tools exist",
+      "Retry failed tool calls once",
+      "Validate outputs before responding",
+      "Ask for clarification only when necessary"
+    ]
+  },
+  "mcp_integration": {
+    "purpose": "Let Agent Swarm reason over available MCP servers and credential state so orchestration can choose tools intentionally.",
+    "config_aliases": {
+      "servers_file": "[REDACTED]-backend/runtime-tools/mcp_servers.json",
+      "token_file": "[REDACTED]-backend/runtime-tools/.env"
+    },
+    "backend_capabilities": [
+      "Load MCP server definitions",
+      "Resolve environment variable placeholders",
+      "Return masked token status to the UI",
+      "Save token values",
+      "Remove token values",
+      "Attach token environment keys to a selected server",
+      "Inject configured server summaries into the orchestration prompt"
+    ],
+    "ui_capabilities": [
+      "Display configured MCP servers",
+      "Display masked tokens",
+      "Select a server",
+      "Save an environment token",
+      "Remove one token or all saved tokens",
+      "Refresh server and credential state"
+    ],
+    "security_notes": [
+      "Tokens are masked when returned to the UI.",
+      "Credential files should remain uncommitted.",
+      "Provider API keys should be loaded from environment variables only.",
+      "Hardcoded provider fallback secrets should be removed before production."
+    ]
+  },
+  "model_and_provider_routing": {
+    "current_state": {
+      "ui_selection": "The UI lets the user select a provider and model before launch.",
+      "backend_selection": "The backend dispatches to provider-specific async call helpers.",
+      "providers_observed_in_backend": [
+        "groq",
+        "nvidia",
+        "openai",
+        "anthropic",
+        "google"
+      ],
+      "providers_observed_in_client_type": [
+        "groq",
+        "nvidia"
+      ],
+      "implementation_note": "The client type and backend provider support are not fully aligned. The architecture should define one canonical provider registry used by both frontend and backend."
+    },
+    "recommended_policy_layer": {
+      "name": "PrismSpace Agent Orchestrator Model",
+      "technical_name": "Context-Aware Multi-Agent Routing and Planning Model",
+      "role": "A policy layer above LLM providers that chooses task type, agents, tools, model/provider, worker count, validation strategy, human approval, and final response strategy.",
+      "does_not_replace": [
+        "OpenAI",
+        "Anthropic",
+        "Google",
+        "Groq",
+        "NVIDIA",
+        "Other LLM providers"
+      ]
+    }
+  },
+  "recommended_model_files": [
+    {
+      "file": "models/intent_classifier.joblib",
+      "purpose": "Classify the objective into orchestration intent categories."
+    },
+    {
+      "file": "models/agent_router.joblib",
+      "purpose": "Route tasks to specialized sub-agents and MCP capabilities."
+    },
+    {
+      "file": "models/model_router.joblib",
+      "purpose": "Choose provider/model using task type, quality, cost, latency, and prior success."
+    },
+    {
+      "file": "models/reward_model.safetensors",
+      "purpose": "Score outputs and learn from accepted, rejected, edited, or failed runs."
+    },
+    {
+      "file": "models/orchestration_policy.json",
+      "purpose": "Store deterministic thresholds, DAG strategy, routing rules, risk rules, and retry policy."
+    }
+  ],
+  "orchestration_functions": [
+    {
+      "function": "Task Intent Classification",
+      "output": "Intent label and confidence",
+      "use_case": "Classify objectives as coding, design, repository, browser, database, research, mixed workflow, or general reasoning.",
+      "practical_start": "Embeddings plus logistic regression, XGBoost, or LightGBM."
+    },
+    {
+      "function": "Agent Router",
+      "output": "Selected specialized agents",
+      "use_case": "Choose planner, reasoning, tool selection, code, Figma, GitHub, filesystem, browser, database, memory, research, and validation agents.",
+      "practical_start": "Embedding retrieval over agent descriptions plus an LLM or cross-encoder reranker."
+    },
+    {
+      "function": "Tool Router",
+      "output": "Selected MCP server and tool plan",
+      "use_case": "Choose available MCP tools based on objective, credentials, and risk.",
+      "practical_start": "Structured tool descriptions, rule filters, and confidence scoring."
+    },
+    {
+      "function": "Model Provider Router",
+      "output": "Provider/model decision",
+      "use_case": "Balance quality, latency, cost, context size, coding ability, and prior task success.",
+      "practical_start": "Contextual bandit or supervised tabular router."
+    },
+    {
+      "function": "Workflow DAG Planning",
+      "output": "Executable multi-agent DAG",
+      "use_case": "Convert objectives into plan, execute, validate, retry, and synthesize stages.",
+      "practical_start": "LLM-generated JSON DAG validated by schema before execution."
+    },
+    {
+      "function": "Success and Failure Prediction",
+      "output": "Failure risk, timeout risk, and escalation recommendation",
+      "use_case": "Predict stuck runs, expensive runs, missing context, likely tool failure, or approval need.",
+      "practical_start": "Gradient-boosted trees over telemetry."
+    },
+    {
+      "function": "Human Approval Prediction",
+      "output": "Approval requirement and reason",
+      "use_case": "Require checkpointing for file writes, repository changes, external APIs, high cost, destructive tasks, or sensitive data.",
+      "practical_start": "Rules first, calibrated classifier later."
+    },
+    {
+      "function": "Validation and Reward Scoring",
+      "output": "Quality score, issue list, and retry recommendation",
+      "use_case": "Judge final answers, compare agent outputs, and learn from feedback.",
+      "practical_start": "LLM-as-judge plus pairwise preference data."
+    },
+    {
+      "function": "Memory and Retrieval Ranking",
+      "output": "Relevant prior runs, docs, files, and examples",
+      "use_case": "Retrieve context for repeated project tasks and similar successful workflows.",
+      "practical_start": "Hybrid BM25 plus vector search with reranking."
+    },
+    {
+      "function": "Cost and Latency Prediction",
+      "output": "Estimated runtime, token use, tool calls, and worker count",
+      "use_case": "Select efficient plans and warn before expensive orchestration.",
+      "practical_start": "XGBoost or LightGBM regression with uncertainty bounds."
+    }
+  ],
+  "recommended_training_and_evaluation": {
+    "telemetry_to_collect": [
+      "objective",
+      "intent",
+      "selected_agents",
+      "selected_tools",
+      "provider",
+      "model",
+      "max_agents",
+      "human_in_loop",
+      "approval_decision",
+      "latency",
+      "token_cost",
+      "tool_count",
+      "retry_count",
+      "errors",
+      "status",
+      "final_result",
+      "user_feedback",
+      "edited_output"
+    ],
+    "dataset_order": [
+      {
+        "phase": 1,
+        "name": "Supervised tool-use training",
+        "dataset": "LARK-Lab/EnvFactory-SFT-FILTERED",
+        "goal": "Train tool-use and routing behavior."
+      },
+      {
+        "phase": 2,
+        "name": "MCP evaluation",
+        "datasets": [
+          "ICIP/LiveMCPBench",
+          "ScaleAI/lhaw"
+        ],
+        "goal": "Evaluate MCP navigation, long-horizon workflows, and underspecified objectives."
+      },
+      {
+        "phase": 3,
+        "name": "Safety evaluation",
+        "dataset": "Bordair/bordair-multimodal",
+        "goal": "Stress prompt-injection and unsafe-tool-use defenses."
+      },
+      {
+        "phase": 4,
+        "name": "Reward optimization",
+        "dataset": "LARK-Lab/EnvFactory-RL",
+        "goal": "Improve orchestration decisions from reward signals."
+      },
+      {
+        "phase": 5,
+        "name": "Optional multimodal evaluation",
+        "dataset": "EtaYang10th/Open-M3-Bench",
+        "goal": "Use only if image or multimodal agents become part of Agent Swarm."
+      }
+    ],
+    "first_build_recommendation": [
+      "Add structured run telemetry persistence",
+      "Create orchestration_policy.json for deterministic routing and risk rules",
+      "Implement lightweight intent and provider routers",
+      "Generate schema-validated DAG plans",
+      "Add explicit validation scoring before final response",
+      "Collect human approval and edit feedback",
+      "Introduce reward modeling only after enough local run data exists"
+    ]
+  },
+  "high_level_architecture": {
+    "pipeline": [
+      "User objective",
+      "Agent Swarm UI",
+      "Typed client",
+      "Next.js API proxy",
+      "Python backend bridge",
+      "Intent classification",
+      "Agent and tool routing",
+      "Provider/model routing",
+      "DAG planning",
+      "Human checkpoint when required",
+      "Provider execution",
+      "Validation",
+      "SSE log streaming",
+      "Final synthesis",
+      "Telemetry and feedback logging"
+    ],
+    "data_flow": [
+      {
+        "from": "Agent Swarm UI",
+        "to": "Next.js proxy",
+        "data": "CreateAgentPayload"
+      },
+      {
+        "from": "Next.js proxy",
+        "to": "Python backend bridge",
+        "data": "CreateAgentRequest"
+      },
+      {
+        "from": "Python backend bridge",
+        "to": "LLM provider",
+        "data": "System prompt, chat history, and user objective"
+      },
+      {
+        "from": "Python backend bridge",
+        "to": "Agent Swarm UI",
+        "data": "Agent state and SSE log frames"
+      },
+      {
+        "from": "Agent Swarm UI",
+        "to": "Python backend bridge",
+        "data": "Approval or rejection decision"
+      }
+    ]
+  },
+  "current_gaps_and_recommendations": [
+    {
+      "area": "Persistence",
+      "current": "Agent state and logs are held in memory.",
+      "recommendation": "Persist runs, logs, telemetry, costs, approvals, and feedback in a database."
+    },
+    {
+      "area": "Provider registry",
+      "current": "Frontend type declarations and backend provider support are not fully aligned.",
+      "recommendation": "Create one shared provider/model registry or generated schema."
+    },
+    {
+      "area": "DAG execution",
+      "current": "The backend logs DAG compilation and worker spawning, then performs one provider call.",
+      "recommendation": "Represent DAG nodes explicitly and execute planner, worker, tool, validator, and synthesizer stages as separate tracked units."
+    },
+    {
+      "area": "Worker limit",
+      "current": "UI clamps visible worker count to 1 through 3.",
+      "recommendation": "Move worker bounds into orchestration_policy.json and enforce the same bounds on backend and frontend."
+    },
+    {
+      "area": "Validation",
+      "current": "Validation is logged after provider response.",
+      "recommendation": "Add structured validators with pass/fail criteria, retry decisions, and evidence."
+    },
+    {
+      "area": "Human-in-the-loop",
+      "current": "Approval is a single checkpoint before final execution.",
+      "recommendation": "Support policy-driven checkpoints per DAG node for risky tools, external writes, and high-cost runs."
+    },
+    {
+      "area": "Credential safety",
+      "current": "MCP tokens are masked in UI responses.",
+      "recommendation": "Keep all secrets out of code, rotate any committed fallback keys, and use environment-only provider credentials."
+    }
+  ],
+  "source_links": [
+    {
+      "name": "RouteLLM",
+      "url": "https://arxiv.org/abs/2406.18665"
+    },
+    {
+      "name": "LLMCompiler",
+      "url": "https://arxiv.org/abs/2312.04511"
+    },
+    {
+      "name": "Self-Discover",
+      "url": "https://arxiv.org/abs/2402.03620"
+    },
+    {
+      "name": "Mixture-of-Agents",
+      "url": "https://arxiv.org/abs/2406.04692"
+    },
+    {
+      "name": "GraphRAG",
+      "url": "https://arxiv.org/abs/2408.08921"
+    },
+    {
+      "name": "EnvFactory-SFT-FILTERED",
+      "url": "https://huggingface.co/datasets/LARK-Lab/EnvFactory-SFT-FILTERED"
+    },
+    {
+      "name": "EnvFactory-RL",
+      "url": "https://huggingface.co/datasets/LARK-Lab/EnvFactory-RL"
+    },
+    {
+      "name": "LiveMCPBench",
+      "url": "https://huggingface.co/datasets/ICIP/LiveMCPBench"
+    },
+    {
+      "name": "ScaleAI/lhaw",
+      "url": "https://huggingface.co/datasets/ScaleAI/lhaw"
+    },
+    {
+      "name": "Bordair multimodal prompt injection dataset",
+      "url": "https://huggingface.co/datasets/Bordair/bordair-multimodal"
+    },
+    {
+      "name": "Open-M3-Bench",
+      "url": "https://huggingface.co/datasets/EtaYang10th/Open-M3-Bench"
+    }
+  ]
+}
