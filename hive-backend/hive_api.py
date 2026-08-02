@@ -461,37 +461,82 @@ _TOOL_CALL_RE = re.compile(
 
 
 def _parse_tool_calls(text: str) -> list[dict]:
-    """Extract tool-call JSON objects from an LLM response."""
+    """Extract tool-call objects from an LLM response.
+
+    Handles three formats emitted by different model families:
+      1. Fenced JSON code blocks:  ```json {"tool": "...", "arguments": {...}} ```
+      2. Bare JSON objects:        {"tool": "...", "arguments": {...}}
+      3. XML tool_call blocks:     <tool_call><function=name><parameter=k>v</parameter></function></tool_call>
+    """
     calls: list[dict] = []
     seen: set[str] = set()
 
-    # Strategy 1: fenced code blocks
+    def _add(obj: dict) -> None:
+        key = json.dumps(obj, sort_keys=True)
+        if key not in seen:
+            seen.add(key)
+            calls.append(obj)
+
+    # ------------------------------------------------------------------
+    # Strategy 1: fenced JSON code blocks
+    # ------------------------------------------------------------------
     for m in re.finditer(r'```(?:json)?\s*([\s\S]*?)```', text):
         raw = m.group(1).strip()
         try:
             obj = json.loads(raw)
             if isinstance(obj, dict) and "tool" in obj:
-                key = json.dumps(obj, sort_keys=True)
-                if key not in seen:
-                    seen.add(key)
-                    calls.append(obj)
+                _add(obj)
         except json.JSONDecodeError:
             pass
 
+    # ------------------------------------------------------------------
     # Strategy 2: bare JSON objects anywhere in the text
+    # ------------------------------------------------------------------
     if not calls:
         for m in re.finditer(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', text, re.DOTALL):
             try:
                 obj = json.loads(m.group())
                 if isinstance(obj, dict) and "tool" in obj and "arguments" in obj:
-                    key = json.dumps(obj, sort_keys=True)
-                    if key not in seen:
-                        seen.add(key)
-                        calls.append(obj)
+                    _add(obj)
             except json.JSONDecodeError:
                 pass
 
+    # ------------------------------------------------------------------
+    # Strategy 3: XML-style <tool_call> blocks
+    # e.g.:
+    #   <tool_call>
+    #   <function=search_files>
+    #   <parameter=pattern>*.tsx</parameter>
+    #   <parameter=target>files</parameter>
+    #   </function>
+    #   </tool_call>
+    # ------------------------------------------------------------------
+    if not calls:
+        for block in re.finditer(
+            r'<tool_call>\s*([\s\S]*?)\s*</tool_call>', text, re.IGNORECASE
+        ):
+            block_text = block.group(1)
+
+            # Extract function name from <function=name> tag
+            fn_match = re.search(r'<function[=\s]+([^\s>]+)', block_text, re.IGNORECASE)
+            if not fn_match:
+                continue
+            tool_name = fn_match.group(1).strip().rstrip('>')
+
+            # Extract all <parameter=key>value</parameter> pairs
+            arguments: dict[str, str] = {}
+            for p in re.finditer(
+                r'<parameter[=\s]+([^\s>]+)\s*>\s*([\s\S]*?)\s*</parameter>',
+                block_text, re.IGNORECASE
+            ):
+                param_key = p.group(1).strip().rstrip('>')
+                param_val = p.group(2).strip()
+                arguments[param_key] = param_val
+
+            _add({"tool": tool_name, "arguments": arguments})
+
     return calls
+
 
 
 def _exec_search_files(args: dict) -> str:
