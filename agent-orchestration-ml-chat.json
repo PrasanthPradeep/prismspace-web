@@ -5,7 +5,7 @@
     "observed_components": {
       "frontend": "Next.js AgentSwarm UI",
       "backend": "FastAPI Hive bridge",
-      "primary_backend_file": "hive-backend/hive_api.py",
+      "primary_backend_file": "backend/hive_api.py",
       "agent_ui_file": "components/AgentSwarm.tsx",
       "client_file": "lib/agent-swarm-client.ts"
     },

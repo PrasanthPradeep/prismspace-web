@@ -16,19 +16,19 @@ WORKSPACE_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # Points to: C:\Users\nobin\OneDrive\Documents\Projects\prismspace-web
 ```
 
-When the agent said "create test_workspace in hive-backend directory," the path resolution was:
+When the agent said "create test_workspace in backend directory," the path resolution was:
 - Input: `test_workspace`
 - Resolved to: `prismspace-web/test_workspace` ❌
-- Should be: `prismspace-web/hive-backend/test_workspace` ✅
+- Should be: `prismspace-web/backend/test_workspace` ✅
 
-**The operations DID execute successfully**, but in the WRONG location (parent directory instead of hive-backend).
+**The operations DID execute successfully**, but in the WRONG location (parent directory instead of backend).
 
 ## Solution
 
 ### 1. Added `HIVE_BACKEND_DIR` constant
 ```python
 HIVE_BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
-# Points to: C:\Users\nobin\OneDrive\Documents\Projects\prismspace-web\hive-backend
+# Points to: C:\Users\nobin\OneDrive\Documents\Projects\prismspace-web\backend
 ```
 
 ### 2. Created `_resolve_path()` helper function
@@ -38,7 +38,7 @@ def _resolve_path(raw_path: str, prefer_backend: bool = True) -> pathlib.Path:
     """
     Intelligently resolve a path provided by the LLM.
     
-    - If path mentions 'hive-backend', strip prefix and resolve to HIVE_BACKEND_DIR
+    - If path mentions 'backend', strip prefix and resolve to HIVE_BACKEND_DIR
     - If path contains backend-specific indicators (test_, hive/, .env), use HIVE_BACKEND_DIR
     - For other relative paths, use HIVE_BACKEND_DIR by default (prefer_backend=True)
     - Absolute paths are used as-is
@@ -46,7 +46,7 @@ def _resolve_path(raw_path: str, prefer_backend: bool = True) -> pathlib.Path:
 ```
 
 **Smart detection logic:**
-- Explicit: `"hive-backend/test_workspace"` → strips prefix → resolves to backend dir
+- Explicit: `"backend/test_workspace"` → strips prefix → resolves to backend dir
 - Implicit: `"test_workspace"` (with backend indicators) → resolves to backend dir
 - Default: All relative paths default to backend dir (safer for most operations)
 
@@ -83,8 +83,8 @@ Location: prismspace-web/test_workspace ❌ (wrong)
 ### After Fix:
 ```
 Agent: create_directory("test_workspace")
-System: Successfully created directory: test_workspace (at .../hive-backend/test_workspace)
-Location: prismspace-web/hive-backend/test_workspace ✅ (correct)
+System: Successfully created directory: test_workspace (at .../backend/test_workspace)
+Location: prismspace-web/backend/test_workspace ✅ (correct)
 ```
 
 ## Verification Needed
@@ -92,11 +92,11 @@ Location: prismspace-web/hive-backend/test_workspace ✅ (correct)
 After this fix, re-run the comprehensive test:
 
 ```
-Use the Filesystem Agent to perform the following sequence of tasks in the hive-backend directory:
-1. List the directory tree for hive-backend (max depth 1)
-2. Search for all Python files (*.py) in the hive-backend directory
+Use the Filesystem Agent to perform the following sequence of tasks in the backend directory:
+1. List the directory tree for backend (max depth 1)
+2. Search for all Python files (*.py) in the backend directory
 3. Read the first 20 lines of hive_api.py
-4. Create a new directory called test_workspace inside hive-backend
+4. Create a new directory called test_workspace inside backend
 5. Write a new file at test_workspace/demo.txt with content
 6. Get the file metadata for demo.txt
 7. Move demo.txt to demo_backup.txt in the same directory
@@ -105,7 +105,7 @@ Use the Filesystem Agent to perform the following sequence of tasks in the hive-
 ```
 
 **Expected behavior:**
-- All operations execute in `hive-backend/` subdirectory
+- All operations execute in `backend/` subdirectory
 - Files are created/moved/deleted at correct location
 - Cleanup removes folder completely
 - No leftover artifacts

@@ -10,7 +10,7 @@ dist/
 build/
 
 # Cloned Hive repo — tracked as a submodule (or ignored here)
-# To use as submodule: git submodule add https://github.com/aden-hive/hive.git hive-backend/hive
+# To use as submodule: git submodule add https://github.com/aden-hive/hive.git backend/hive
 hive/
 
 # Env / secrets

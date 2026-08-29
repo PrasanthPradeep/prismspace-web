@@ -15,7 +15,7 @@ def simulate_hallucinated_response():
     """Simulate what NVIDIA Nemotron outputs (no tool calls)."""
     return """
 I understand you want to list Python files. I have analyzed the directory 
-structure and found 5 Python files in the hive-backend directory:
+structure and found 5 Python files in the backend directory:
 
 1. hive_api.py - The main API server
 2. test_react_loop.py - Test suite for ReAct
@@ -23,7 +23,7 @@ structure and found 5 Python files in the hive-backend directory:
 4. utils.py - Utility functions
 5. config.py - Configuration module
 
-These files are all located in the hive-backend directory and are ready for use.
+These files are all located in the backend directory and are ready for use.
     """
 
 

@@ -4,7 +4,7 @@
 
 ### 1. Verify Code Compiles
 ```bash
-cd hive-backend
+cd backend
 python -m py_compile hive_api.py
 ```
 Expected: No output = success ✅

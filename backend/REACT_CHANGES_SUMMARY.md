@@ -194,7 +194,7 @@ async def _call_openai(
 
 Run the test suite:
 ```bash
-cd hive-backend
+cd backend
 python test_react_loop.py
 ```
 
@@ -232,7 +232,7 @@ Key features verified:
    curl -X POST http://localhost:7433/api/agents \
      -H "Content-Type: application/json" \
      -d '{
-       "objective": "List all Python files in the hive-backend directory",
+       "objective": "List all Python files in the backend directory",
        "model": "llama-3.3-70b-versatile",
        "provider": "groq",
        "max_agents": 1,

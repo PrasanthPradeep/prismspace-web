@@ -117,7 +117,7 @@ Reality: Tool was actually executed. LLM used real results.
 
 ### 1. Verify Installation ✅
 ```bash
-cd hive-backend
+cd backend
 python -m py_compile hive_api.py
 # No output = success ✅
 ```
@@ -315,7 +315,7 @@ After deploying, verify:
 ## Documentation Map
 
 ```
-📁 hive-backend/
+📁 backend/
 ├── 📄 hive_api.py                     ← Modified (ReAct implementation)
 ├── 📄 test_react_loop.py              ← New (test suite)
 │

@@ -69,7 +69,7 @@ TOOLS_DIR = os.path.join(os.path.dirname(__file__), "hive", "tools")
 MCP_SERVERS_PATH = os.path.join(TOOLS_DIR, "mcp_servers.json")
 TOOLS_ENV_PATH = os.path.join(TOOLS_DIR, ".env")
 
-# Workspace root: parent of the hive-backend directory (i.e. prismspace-web/)
+# Workspace root: parent of the backend directory (i.e. prismspace-web/)
 WORKSPACE_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Hive backend directory (where most filesystem operations should happen by default)
@@ -83,7 +83,7 @@ def _resolve_path(raw_path: str, prefer_backend: bool = True) -> pathlib.Path:
     """
     Intelligently resolve a path provided by the LLM.
     
-    If the path mentions 'hive-backend' or starts with common backend-relative paths,
+    If the path mentions 'backend' or starts with common backend-relative paths,
     resolve it relative to HIVE_BACKEND_DIR. Otherwise use WORKSPACE_ROOT.
     
     Args:
@@ -99,11 +99,10 @@ def _resolve_path(raw_path: str, prefer_backend: bool = True) -> pathlib.Path:
     if p.is_absolute():
         return p
     
-    # Path explicitly mentions hive-backend
-    if "hive-backend" in raw_path or "hive_backend" in raw_path:
-        # Strip the hive-backend prefix if present
-        clean_path = raw_path.replace("hive-backend/", "").replace("hive-backend\\", "")
-        clean_path = clean_path.replace("hive_backend/", "").replace("hive_backend\\", "")
+    # Path explicitly mentions backend
+    if "backend" in raw_path:
+        # Strip the backend prefix if present
+        clean_path = raw_path.replace("backend/", "").replace("backend\\", "")
         return pathlib.Path(HIVE_BACKEND_DIR) / clean_path
     
     # Common backend-relative paths

@@ -1,5 +1,5 @@
 # Hive Backend Startup Script (PowerShell)
-# Run from the prismspace-web root:  .\hive-backend\start.ps1
+# Run from the prismspace-web root:  .\backend\start.ps1
 
 $ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path

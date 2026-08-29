@@ -1,9 +1,9 @@
 # 🐝 Hive Backend — Setup & Agent API Guide
 
-> **Project:** PrismSpace Web — `hive-backend/`  
+> **Project:** PrismSpace Web — `backend/`  
 > **FastAPI bridge:** `hive_api.py` → runs on `http://localhost:7433`  
 > **Frontend proxy:** Next.js routes at `/api/agent-swarm/**` → proxies to `localhost:7433`  
-> **Hive runtime:** `hive-backend/hive/` (aden-hive/hive repo)
+> **Hive runtime:** `backend/hive/` (aden-hive/hive repo)
 
 ---
 
@@ -49,14 +49,14 @@ pip install uv
 prismspace-web/
 ├── app/
 │   └── api/
-│       └── agent-swarm/          ← Next.js proxy routes to hive-backend
+│       └── agent-swarm/          ← Next.js proxy routes to backend
 │           ├── agents/
 │           │   ├── route.ts      ← GET/POST /api/agent-swarm/agents
 │           │   └── [id]/
 │           │       ├── route.ts
 │           │       ├── approve/route.ts
 │           │       └── logs/route.ts
-├── hive-backend/
+├── backend/
 │   ├── hive_api.py               ← FastAPI bridge (port 7433)
 │   ├── requirements.txt          ← Python deps for the bridge
 │   ├── start.ps1                 ← One-click startup script (Windows)
@@ -72,18 +72,18 @@ prismspace-web/
 
 ## 3. Step 1 — Create your `.env` file
 
-Create the file `hive-backend/.env` (it is already in `.gitignore` — **never commit this**):
+Create the file `backend/.env` (it is already in `.gitignore` — **never commit this**):
 
 ```powershell
 # Run from prismspace-web root
-New-Item -Path "hive-backend\.env" -ItemType File
+New-Item -Path "backend\.env" -ItemType File
 ```
 
 Then open and paste **whichever keys you have**:
 
 ```env
 # ────────────────────────────────────────────────────────
-# hive-backend/.env
+# backend/.env
 # Paste your API keys below. You only need the ones you use.
 # ────────────────────────────────────────────────────────
 
@@ -139,21 +139,21 @@ The bridge is the FastAPI server in `hive_api.py` that the Next.js frontend talk
 
 ```powershell
 # Run from prismspace-web root
-.\hive-backend\start.ps1
+.\backend\start.ps1
 ```
 
 This script automatically:
 - Checks for Python 3.11+
 - Creates/activates the `.venv` virtual environment
 - Installs dependencies from `requirements.txt`
-- Clones `aden-hive/hive` into `hive-backend/hive/` if not present
+- Clones `aden-hive/hive` into `backend/hive/` if not present
 - Starts the FastAPI server on **http://localhost:7433**
 
 ### Option B — Manual (step by step)
 
 ```powershell
-# 1. Navigate to hive-backend
-cd hive-backend
+# 1. Navigate to backend
+cd backend
 
 # 2. Create virtual environment
 python -m venv .venv
@@ -182,12 +182,12 @@ Invoke-RestMethod http://localhost:7433/health
 
 ## 5. Step 3 — Set up the Hive Runtime
 
-The Hive runtime (`hive-backend/hive/`) is the actual multi-agent execution engine.
+The Hive runtime (`backend/hive/`) is the actual multi-agent execution engine.
 It needs its own setup separate from the FastAPI bridge.
 
 ```powershell
 # Navigate into the Hive repo
-cd hive-backend\hive
+cd backend\hive
 
 # Run the Hive quickstart (Windows PowerShell)
 .\quickstart.ps1
@@ -209,7 +209,7 @@ $env:GROQ_API_KEY      = "gsk_..."
 $env:ANTHROPIC_API_KEY = "sk-ant-..."
 
 # Then run Hive
-cd hive-backend\hive
+cd backend\hive
 .\hive.ps1 open
 ```
 
@@ -424,7 +424,7 @@ Run these in order to verify everything works end-to-end:
 ```powershell
 # ── Terminal 1: Start Hive Bridge ──────────────────────────────
 cd C:\Users\nobin\OneDrive\Documents\Projects\prismspace-web
-.\hive-backend\start.ps1
+.\backend\start.ps1
 
 # ── Terminal 2: Start Frontend ──────────────────────────────────
 cd C:\Users\nobin\OneDrive\Documents\Projects\prismspace-web
@@ -492,7 +492,7 @@ taskkill /PID <PID-HERE> /F
 - If you changed the port, set `HIVE_API_URL=http://localhost:<port>` in `prismspace-web/.env.local`
 
 ### ❌ API key not being loaded
-- The `.env` file must be in `hive-backend/` (same directory as `hive_api.py`)
+- The `.env` file must be in `backend/` (same directory as `hive_api.py`)
 - No spaces around `=` in the `.env` file: `GROQ_API_KEY=gsk_...` ✅
 - Verify `python-dotenv` is installed: `pip show python-dotenv`
 
@@ -510,7 +510,7 @@ winget install astral-sh.uv
 
 # Set it for the current session then rerun Hive
 $env:GROQ_API_KEY = "gsk_..."
-cd hive-backend\hive
+cd backend\hive
 .\hive.ps1 open
 ```
 
@@ -521,14 +521,14 @@ cd hive-backend\hive
 ```powershell
 # ── Terminal 1: Hive Bridge API (FastAPI on :7433) ──────
 cd C:\Users\nobin\OneDrive\Documents\Projects\prismspace-web
-.\hive-backend\start.ps1
+.\backend\start.ps1
 
 # ── Terminal 2: Next.js Frontend (on :3000) ─────────────
 cd C:\Users\nobin\OneDrive\Documents\Projects\prismspace-web
 npm run dev
 
 # ── Terminal 3 (optional): Hive Runtime Dashboard ────────
-cd C:\Users\nobin\OneDrive\Documents\Projects\prismspace-web\hive-backend\hive
+cd C:\Users\nobin\OneDrive\Documents\Projects\prismspace-web\backend\hive
 .\hive.ps1 open
 ```
 
@@ -541,4 +541,4 @@ cd C:\Users\nobin\OneDrive\Documents\Projects\prismspace-web\hive-backend\hive
 
 ---
 
-*Setup guide for PrismSpace Web — hive-backend v1.0.0*
+*Setup guide for PrismSpace Web — backend v1.0.0*

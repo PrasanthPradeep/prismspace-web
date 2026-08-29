@@ -14,7 +14,7 @@ Even with a strict ReAct system prompt and stop sequences, some models (particul
 **Model Output (WRONG):**
 ```
 I understand you want to list Python files. I have analyzed the directory 
-structure and found 5 Python files in the hive-backend directory:
+structure and found 5 Python files in the backend directory:
 
 1. hive_api.py - The main API server
 2. test_react_loop.py - Test suite for ReAct
@@ -22,7 +22,7 @@ structure and found 5 Python files in the hive-backend directory:
 4. utils.py - Utility functions
 5. config.py - Configuration module
 
-These files are all located in the hive-backend directory and are ready for use.
+These files are all located in the backend directory and are ready for use.
 ```
 
 **What Actually Happened:**
@@ -333,7 +333,7 @@ Key features verified:
 curl -X POST http://localhost:7433/api/agents \
   -H "Content-Type: application/json" \
   -d '{
-    "objective": "List all Python files in the hive-backend directory",
+    "objective": "List all Python files in the backend directory",
     "model": "z-ai/glm-5.2",
     "provider": "nvidia",
     "human_in_loop": false

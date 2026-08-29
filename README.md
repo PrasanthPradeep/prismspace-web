@@ -39,7 +39,7 @@ cd prismspace-web
 npm install
 
 # Run the Hive API Backend (in a PowerShell terminal)
-.\hive-backend\start.ps1
+.\backend\start.ps1
 
 # Run the Next.js development server (in a separate terminal)
 npm run dev
@@ -112,7 +112,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser. The Hive Ba
 
 ```bash
 # Backend (PowerShell)
-.\hive-backend\start.ps1     # Starts Python virtual environment, installs dependencies, and runs FastAPI server on port 8000
+.\backend\start.ps1     # Starts Python virtual environment, installs dependencies, and runs FastAPI server on port 8000
 
 # Frontend Development
 npm run dev                  # Start Next.js dev server (http://localhost:3000)

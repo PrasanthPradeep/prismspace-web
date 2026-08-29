@@ -1,0 +1,23 @@
+# Install a CUDA-matched PyTorch build first: https://pytorch.org/get-started/locally/
+torch
+torchvision
+torchaudio
+transformers
+accelerate
+datasets
+sentence-transformers
+scikit-learn
+xgboost
+lightgbm
+catboost
+hdbscan
+faiss-gpu; platform_system != "Windows"
+faiss-cpu; platform_system == "Windows"
+optuna
+joblib
+pandas
+numpy
+pyarrow
+safetensors
+tqdm
+tensorboard

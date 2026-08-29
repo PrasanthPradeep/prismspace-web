@@ -730,7 +730,7 @@ export function AgentSwarm({ onClose }: AgentSwarmProps) {
           <div>
             <p className="font-semibold text-red-200">Agent Swarm backend is not running</p>
             <p className="mt-0.5 text-xs text-red-200/72">
-              Start it with <code className="rounded bg-black/30 px-1 font-mono">.\hive-backend\start.ps1</code>. The
+              Start it with <code className="rounded bg-black/30 px-1 font-mono">.\backend\start.ps1</code>. The
               dashboard will reconnect automatically.
             </p>
           </div>
