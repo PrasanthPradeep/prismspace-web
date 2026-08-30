@@ -10,10 +10,24 @@ from sklearn.compose import ColumnTransformer
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import MultiLabelBinarizer, StandardScaler
+from sklearn.preprocessing import LabelEncoder, MultiLabelBinarizer, StandardScaler
 from sklearn.linear_model import LogisticRegression
-from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostingRegressor, IsolationForest
+from sklearn.ensemble import IsolationForest
 from sklearn.model_selection import train_test_split
+from xgboost import XGBClassifier, XGBRegressor
+
+def _xgb_device() -> str:
+    """Return 'cuda' if a CUDA GPU is available, else 'cpu'."""
+    try:
+        import xgboost as xgb
+        # XGBoost >= 2.0 raises an error on fit() if CUDA is unavailable;
+        # probing here keeps the rest of the code simple.
+        probe = xgb.XGBRegressor(device='cuda', n_estimators=1, verbosity=0)
+        import numpy as _np
+        probe.fit(_np.zeros((2, 1)), _np.zeros(2))
+        return 'cuda'
+    except Exception:
+        return 'cpu'
 
 from .dataset_loader import DatasetLoader
 from .feature_engineering import FeatureEngineer
@@ -41,19 +55,42 @@ class TabularTrainer:
         if len(y) < 8 or y.nunique() < 2: return TrainResult(self.name, False, "Need at least 8 rows and 2 target values")
         features = FeatureEngineer().transform(frame)
         X = pd.DataFrame({"text": features.texts, **{f"numeric_{i}": features.numeric[:,i] for i in range(features.numeric.shape[1])}})
-        preprocessor = ColumnTransformer([("text", TfidfVectorizer(ngram_range=(1,2), max_features=30000), "text"), ("num", Pipeline([("impute",SimpleImputer()),("scale",StandardScaler())]), [c for c in X if c != "text"])])
+        num_cols = [c for c in X if c != "text"]
+        preprocessor = ColumnTransformer([("text", TfidfVectorizer(ngram_range=(1,2), max_features=10000, token_pattern=r"(?u)\b\w+\b"), "text"), ("num", Pipeline([("impute",SimpleImputer()),("scale",StandardScaler())]), num_cols)])
+        num_only_preprocessor = ColumnTransformer([("num", Pipeline([("impute",SimpleImputer()),("scale",StandardScaler())]), num_cols)])
         if self.task == "multilabel":
             labels = y.map(lambda v: [x.strip() for x in v.strip("[]").replace("'", "").split(",") if x.strip()]); encoder = MultiLabelBinarizer(); encoded = encoder.fit_transform(labels)
             from sklearn.multiclass import OneVsRestClassifier
             estimator = OneVsRestClassifier(LogisticRegression(max_iter=1000, class_weight="balanced")); model = Pipeline([("features",preprocessor),("model",estimator)])
-            model.fit(X, encoded); bundle={"model":model,"label_encoder":encoder,"target":target}; metrics={"samples":len(y),"labels":len(encoder.classes_)}
+            try: model.fit(X, encoded)
+            except ValueError:
+                LOG.warning("%s: TF-IDF produced empty vocabulary; falling back to numeric-only features.", self.name)
+                model = Pipeline([("features",num_only_preprocessor),("model",estimator)]); model.fit(X, encoded)
+            bundle={"model":model,"label_encoder":encoder,"target":target}; metrics={"samples":len(y),"labels":len(encoder.classes_)}
         else:
+            label_enc = None
             stratify = y if self.task == "classification" and y.value_counts().min() >= 2 else None
             Xtr, Xte, ytr, yte = train_test_split(X,y,test_size=.2,random_state=self.seed,stratify=stratify)
-            estimator = LogisticRegression(max_iter=1500,class_weight="balanced") if self.task == "classification" else HistGradientBoostingRegressor(random_state=self.seed)
-            model=Pipeline([("features",preprocessor),("model",estimator)]); model.fit(Xtr,ytr); pred=model.predict(Xte)
-            metrics = classification_metrics(yte,pred,model.predict_proba(Xte) if self.task=="classification" else None) if self.task=="classification" else regression_metrics(yte,pred)
-            bundle={"model":model,"target":target,"task":self.task}
+            if self.task == "classification":
+                label_enc = LabelEncoder()
+                ytr = pd.Series(label_enc.fit_transform(ytr), index=ytr.index)
+                known = yte.isin(label_enc.classes_).values; Xte, yte = Xte[known], yte[known]
+                yte = pd.Series(label_enc.transform(yte), index=yte.index)
+            device = _xgb_device()
+            LOG.info("%s: XGBoost device = %s", self.name, device)
+            estimator = XGBClassifier(n_estimators=100, max_depth=6, learning_rate=0.1, device=device, random_state=self.seed, verbosity=0, eval_metric='mlogloss') if self.task == "classification" else XGBRegressor(n_estimators=100, max_depth=6, learning_rate=0.1, device=device, random_state=self.seed, verbosity=0)
+            try: model=Pipeline([("features",preprocessor),("model",estimator)]); model.fit(Xtr,ytr)
+            except ValueError as exc:
+                if "empty vocabulary" not in str(exc): raise
+                LOG.warning("%s: TF-IDF produced empty vocabulary; falling back to numeric-only features.", self.name)
+                model=Pipeline([("features",num_only_preprocessor),("model",estimator)]); model.fit(Xtr,ytr)
+            pred=model.predict(Xte)
+            if label_enc is not None:
+                pred_labels = label_enc.inverse_transform(pred); yte_labels = label_enc.inverse_transform(yte)
+                metrics = classification_metrics(yte_labels, pred_labels, model.predict_proba(Xte))
+            else:
+                metrics = regression_metrics(yte, pred)
+            bundle={"model":model,"target":target,"task":self.task,"label_encoder":label_enc}
         artifact_names = {"intent": "intent_classifier", "agent": "agent_router", "provider": "model_router", "success": "workflow_success_predictor", "approval": "approval_predictor", "latency": "latency_predictor", "cost": "cost_predictor"}
         path=self.output_dir / f"{artifact_names.get(self.name, self.name + '_predictor')}.joblib"; joblib.dump(bundle,path); write_json(self.output_dir / "logs" / f"{self.name}_metrics.json",metrics)
         return TrainResult(self.name,True,metrics=metrics)

@@ -7,7 +7,7 @@ from typing import Any
 import pandas as pd
 
 from .utils import get_logger, jsonable
-from .label_taxonomy import normalize_agent_label, normalize_provider_label
+from .label_taxonomy import normalize_agent_label, normalize_intent_label, normalize_provider_label
 
 LOG = get_logger(__name__)
 SUPPORTED = {".csv", ".json", ".jsonl", ".parquet", ".txt", ".gz"}
@@ -197,11 +197,12 @@ class DatasetLoader:
             for raw, text, source in zip(derived["_agent_raw"], derived["_text"], frame["_source_file"])
         ]
         derived["_provider_label"] = derived["_provider_raw"].map(normalize_provider_label)
+        derived["_intent_label"] = derived["_intent_label"].map(normalize_intent_label)
         # Benchmarks commonly encode the result as a Boolean database match or a
         # numeric score.  Convert both conventions to an explicit binary target.
         success = derived["_success_raw"].astype("string").str.strip().str.lower()
         derived["_success_label"] = success.map({
-            "true": "success", "1": "success", "1.0": "success", "yes": "success", "passed": "success", "pass": "success",
+            "true": "success", "1": "success", "1.0": "success", "yes": "success", "passed": "success", "pass": "success", "completed": "success", "complete": "success", "done": "success",
             "false": "failure", "0": "failure", "0.0": "failure", "no": "failure", "failed": "failure", "fail": "failure",
         }).fillna(derived["_success_raw"])
         return pd.concat([frame.copy(), derived], axis=1)

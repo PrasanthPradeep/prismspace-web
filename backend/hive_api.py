@@ -35,6 +35,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+# ML Model Inference
+try:
+    from model_inference import analyze_request as _ml_analyze, get_status as _ml_status
+    _ML_AVAILABLE = True
+except ImportError:
+    _ML_AVAILABLE = False
+    def _ml_analyze(text): return None
+    def _ml_status(): return {"loaded": False, "models_count": 0, "models": []}
+
 # ---------------------------------------------------------------------------
 # App setup
 # ---------------------------------------------------------------------------
@@ -1328,7 +1337,12 @@ async def _run_hive_agent(agent_id: str, request: CreateAgentRequest) -> None:
 @app.get("/health")
 async def health_check():
     """Liveness probe — used by the frontend to verify the backend is running."""
-    return {"status": "ok", "version": "1.0.0", "agents": len(_agents)}
+    return {
+        "status": "ok",
+        "version": "1.0.0",
+        "agents": len(_agents),
+        "ml_models": _ml_status() if _ML_AVAILABLE else {"loaded": False},
+    }
 
 
 @app.get("/api/mcp")
@@ -1471,6 +1485,24 @@ async def create_agent(
     agent_id = str(uuid.uuid4())
     now = datetime.utcnow().isoformat()
 
+    # --- ML Intelligence ---
+    intelligence = None
+    if _ML_AVAILABLE:
+        try:
+            result = _ml_analyze(request.objective)
+            if result is not None:
+                intelligence = result.to_dict()
+
+                # Smart provider routing: if user used the default, use ML recommendation
+                if request.provider == "nvidia" and result.recommended_provider != "nvidia":
+                    request.provider = result.recommended_provider
+
+                # Auto-enable human-in-loop if approval model says it's needed
+                if result.approval_required and not request.human_in_loop:
+                    request.human_in_loop = True
+        except Exception as exc:
+            intelligence = {"error": str(exc)}
+
     agent = {
         "id": agent_id,
         "objective": request.objective,
@@ -1483,10 +1515,20 @@ async def create_agent(
         "updated_at": now,
         "result": None,
         "approved": None,
+        "intelligence": intelligence,
     }
 
     _agents[agent_id] = agent
     _logs[agent_id] = []
+
+    # Log intelligence results
+    if intelligence and "error" not in intelligence:
+        _log(agent_id, f"🧠 ML Intelligence: intent={intelligence.get('intent')} "
+             f"provider={intelligence.get('recommended_provider')} "
+             f"latency≈{intelligence.get('estimated_latency_seconds', '?')}s "
+             f"cost≈{intelligence.get('estimated_cost', '?')} "
+             f"approval={'required' if intelligence.get('approval_required') else 'not needed'} "
+             f"anomaly={'⚠️ YES' if intelligence.get('is_anomalous') else 'no'}")
 
     background_tasks.add_task(_run_hive_agent, agent_id, request)
     return agent
@@ -1569,6 +1611,22 @@ async def stream_logs(agent_id: str, since: int = 0):
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@app.get("/api/intelligence")
+async def intelligence_endpoint(text: str):
+    """Standalone ML intelligence endpoint — analyze a prompt without creating an agent."""
+    if not _ML_AVAILABLE:
+        raise HTTPException(status_code=503, detail="ML models not loaded")
+    try:
+        result = _ml_analyze(text)
+        if result is None:
+            raise HTTPException(status_code=500, detail="Analysis returned None")
+        return result.to_dict()
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 # ---------------------------------------------------------------------------
