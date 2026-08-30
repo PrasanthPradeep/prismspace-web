@@ -14,6 +14,7 @@ LLM_PROVIDERS = ("GPT", "Claude", "Gemini", "Groq", "NVIDIA", "Local")
 # the intent vocabulary deliberately small so every class has useful training
 # coverage and so downstream latency/cost baselines have stable keys.
 INTENT_REMAP: dict[str, str] = {
+    "general": "general",
     "text generation": "text_generation",
     "language modeling": "text_generation",
     "causal language modeling": "text_generation",
@@ -107,7 +108,11 @@ def normalize_intent_label(value: object) -> str:
     for intent, keywords in INTENT_KEYWORDS:
         if any(keyword in text for keyword in keywords):
             return intent
-    return "general"
+    # An unrecognized architecture/model-card name is not a user intent.
+    # Returning an empty label removes it from supervised intent training
+    # instead of letting an artificial ``general`` majority swamp the
+    # meaningful task classes.
+    return ""
 
 
 def normalize_provider_label(value: object) -> str:

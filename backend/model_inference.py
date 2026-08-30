@@ -95,6 +95,31 @@ def _build_numeric_only(text: str) -> np.ndarray:
     ]], dtype=np.float32)
 
 
+# The heterogeneous training corpus has reliable task names but does not
+# consistently pair them with natural-language requests.  Prefer precise,
+# user-facing task cues when present; the trained classifier remains the
+# fallback for requests that do not match one of these unambiguous patterns.
+INTENT_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("image_generation", (r"\b(image|picture|photo) generation\b", r"\btext[- ]to[- ]image\b", r"\bstable diffusion\b", r"\bdiffusion model\b")),
+    ("object_detection", (r"\bobject detection\b", r"\bdetect objects?\b", r"\byolo\b", r"\bdetectron\b")),
+    ("image_segmentation", (r"\bimage segmentation\b", r"\bsegment (this )?(image|photo|picture)\b")),
+    ("image_classification", (r"\bclassify (this )?(image|photo|picture)\b", r"\bimage classification\b", r"\brecognize (this )?(image|photo|picture)\b")),
+    ("translation", (r"\btranslate\b", r"\btranslation\b", r"\bconvert .+ to (english|french|spanish|german|chinese|japanese)\b")),
+    ("summarization", (r"\bsummari[sz]e\b", r"\bsummarization\b", r"\btl;dr\b")),
+    ("code_generation", (r"\b(write|generate|create) (a |some )?(python|javascript|typescript|java|sql|code)\b", r"\bcode generation\b", r"\bimplement (a |the )?(function|class|api)\b")),
+    ("question_answering", (r"\b(question answering|answer this question)\b", r"^(what|who|when|where|why|how)\b")),
+    ("text_generation", (r"\b(generate|write|compose|draft)\b", r"\b(short )?story\b", r"\btext generation\b")),
+)
+
+
+def _rule_based_intent(text: str) -> Optional[str]:
+    """Return a task intent only for unambiguous user-request phrasing."""
+    for intent, patterns in INTENT_RULES:
+        if any(re.search(pattern, text, flags=re.IGNORECASE) for pattern in patterns):
+            return intent
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Prediction helpers
 # ---------------------------------------------------------------------------
@@ -210,10 +235,22 @@ APPROVAL_KEYWORDS = [
     "sudo rm", "shutdown", "disable security", "root access",
 ]
 
+# These are narrowly defensive requests, not merely the presence of a safety
+# keyword.  Keep the patterns specific so an adversarial request cannot evade
+# approval by adding generic educational language.
+DEFENSIVE_SAFETY_PATTERNS = (
+    r"\bsecure password (storage|management|hashing)\b",
+    r"\bprevent sql injection\b",
+    r"\bphishing awareness (training|program)\b",
+    r"\bresponsible[- ]disclosure policy\b",
+)
+
 
 def _check_approval(text: str) -> tuple[bool, float]:
     """Rule-based safety check. Returns (needs_approval, confidence)."""
     text_lower = text.lower()
+    if any(re.search(pattern, text_lower) for pattern in DEFENSIVE_SAFETY_PATTERNS):
+        return False, 0.10
     for keyword in APPROVAL_KEYWORDS:
         if keyword in text_lower:
             return True, 0.95
@@ -327,7 +364,11 @@ def analyze_request(text: str) -> IntelligenceResult:
     features = _build_features(text)
 
     # 1. Intent Classification
-    result.intent, result.intent_confidence = _predict_class("intent", features)
+    rule_intent = _rule_based_intent(text)
+    if rule_intent:
+        result.intent, result.intent_confidence = rule_intent, 0.95
+    else:
+        result.intent, result.intent_confidence = _predict_class("intent", features)
 
     # 2. Agent Routing
     result.recommended_agent, result.agent_confidence = _predict_class("agent", features)

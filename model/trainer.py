@@ -49,6 +49,11 @@ class TabularTrainer:
         if not target: return TrainResult(self.name, False, f"No compatible label column for {self.name}")
         y = frame[target].astype(str)
         valid = ~y.str.strip().isin(["", "nan", "None"])
+        # ``general`` is an inference fallback, not a supervised intent.  It
+        # appears frequently in mixed-source datasets and otherwise overwhelms
+        # the user-facing task labels this classifier is meant to distinguish.
+        if self.name == "intent":
+            valid &= y.str.strip().ne("general")
         frame, y = frame.loc[valid].copy(), y.loc[valid].copy()
         if self.task == "regression":
             y = pd.to_numeric(frame[target], errors="coerce"); keep = y.notna(); frame, y = frame.loc[keep], y.loc[keep]
