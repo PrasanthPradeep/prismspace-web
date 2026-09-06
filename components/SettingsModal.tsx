@@ -103,6 +103,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   const [dynamicGreetings, setDynamicGreetings] = useState(true);
   const [showGreetings, setShowGreetings] = useState(true);
   const [matrixDisplay, setMatrixDisplay] = useState(true);
+  const [customCursor, setCustomCursor] = useState(true);
   const [dynamicIsland, setDynamicIsland] = useState(true);
   const [dynamicIslandSeconds, setDynamicIslandSeconds] = useState(false);
   const [dynamicIslandExpand, setDynamicIslandExpand] = useState(true);
@@ -135,6 +136,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
     const savedDynamicGreetings = localStorage.getItem('dynamicGreetings') !== 'false';
     const savedShowGreetings = localStorage.getItem('showGreetings') !== 'false';
     const savedMatrixDisplay = localStorage.getItem('matrixDisplay') !== 'false';
+    const savedCustomCursor = localStorage.getItem('customCursor') !== 'false';
     
     setClockFormat(savedFormat);
     setClockStyle(savedStyle);
@@ -143,6 +145,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
     setDynamicGreetings(savedDynamicGreetings);
     setShowGreetings(savedShowGreetings);
     setMatrixDisplay(savedMatrixDisplay);
+    setCustomCursor(savedCustomCursor);
     setDynamicIsland(localStorage.getItem('dynamicIsland') !== 'false');
     setDynamicIslandSeconds(localStorage.getItem('dynamicIslandSeconds') === 'true');
     setDynamicIslandExpand(localStorage.getItem('dynamicIslandExpand') !== 'false');
@@ -748,6 +751,23 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             <div className="space-y-6">
               <h2 className="text-2xl font-semibold mb-6">Extras</h2>
               
+              <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl">
+                <div>
+                  <div className="font-medium mb-1">Custom Cursor</div>
+                  <div className="text-sm text-white/60">Show the animated smooth cursor instead of the system pointer.</div>
+                </div>
+                <AppleSwitch
+                  checked={customCursor}
+                  onCheckedChange={(checked) => {
+                    setCustomCursor(checked);
+                    localStorage.setItem('customCursor', checked.toString());
+                    window.dispatchEvent(new CustomEvent('prism:cursor-settings'));
+                  }}
+                  size="sm"
+                  aria-label="Custom Cursor"
+                />
+              </div>
+
               <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl">
                 <div>
                   <div className="font-medium mb-1">Matrix Display</div>

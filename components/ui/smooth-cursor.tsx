@@ -10,6 +10,7 @@ interface Position {
 
 export interface SmoothCursorProps {
   cursor?: React.ReactNode
+  enabled?: boolean
   springConfig?: {
     damping: number
     stiffness: number
@@ -88,6 +89,7 @@ const DefaultCursorSVG: FC = () => {
 
 export function SmoothCursor({
   cursor = <DefaultCursorSVG />,
+  enabled = true,
   springConfig = {
     damping: 45,
     stiffness: 400,
@@ -95,6 +97,7 @@ export function SmoothCursor({
     restDelta: 0.001,
   },
 }: SmoothCursorProps) {
+  const [userEnabled, setUserEnabled] = useState(enabled)
   const lastMousePos = useRef<Position>({ x: 0, y: 0 })
   const velocity = useRef<Position>({ x: 0, y: 0 })
   const lastUpdateTime = useRef(Date.now())
@@ -117,6 +120,37 @@ export function SmoothCursor({
   })
 
   useEffect(() => {
+    const readSetting = () => {
+      try {
+        return localStorage.getItem("customCursor") !== "false"
+      } catch {
+        return true
+      }
+    }
+
+    setUserEnabled(enabled && readSetting())
+
+    const onSettingChange = () => setUserEnabled(enabled && readSetting())
+    window.addEventListener("prism:cursor-settings", onSettingChange)
+    window.addEventListener("storage", onSettingChange)
+
+    return () => {
+      window.removeEventListener("prism:cursor-settings", onSettingChange)
+      window.removeEventListener("storage", onSettingChange)
+    }
+  }, [enabled])
+
+  useEffect(() => {
+    if (!userEnabled) {
+      document.documentElement.classList.remove("custom-cursor")
+      document.body.style.cursor = "pointer"
+      return () => {
+        document.body.style.cursor = "auto"
+      }
+    }
+  }, [userEnabled])
+
+  useEffect(() => {
     const mediaQuery = window.matchMedia(DESKTOP_POINTER_QUERY)
 
     const updateEnabled = () => {
@@ -137,9 +171,11 @@ export function SmoothCursor({
   }, [])
 
   useEffect(() => {
-    if (!isEnabled) {
+    if (!isEnabled || !userEnabled) {
       return
     }
+
+    document.documentElement.classList.add("custom-cursor")
 
     let timeout: ReturnType<typeof setTimeout> | null = null
 
@@ -221,14 +257,15 @@ export function SmoothCursor({
     return () => {
       window.removeEventListener("pointermove", throttledPointerMove)
       document.body.style.cursor = "auto"
+      document.documentElement.classList.remove("custom-cursor")
       if (rafId) cancelAnimationFrame(rafId)
       if (timeout !== null) {
         clearTimeout(timeout)
       }
     }
-  }, [cursorX, cursorY, rotation, scale, isEnabled])
+  }, [cursorX, cursorY, rotation, scale, isEnabled, userEnabled])
 
-  if (!isEnabled) {
+  if (!isEnabled || !userEnabled) {
     return null
   }
 

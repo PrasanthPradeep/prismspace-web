@@ -76,6 +76,11 @@
   * {
     @apply m-0 p-0 box-border border-border;
     outline-color: oklch(from var(--ring) l c h / 50%);
+  }
+
+  /* Hide the system cursor only while the animated custom cursor is active */
+  html.custom-cursor *,
+  html.custom-cursor {
     cursor: none !important;
   }
 
