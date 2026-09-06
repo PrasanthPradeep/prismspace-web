@@ -3,11 +3,14 @@ Test ML Model Inference Integration
 =====================================
 Verifies all trained models load correctly and produce reasonable predictions.
 Run from the project root:
-    .venv\Scripts\python.exe backend\test_model_inference.py
+    .venv\\Scripts\\python.exe backend\\test_model_inference.py
 """
 
 from __future__ import annotations
 import sys, os
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
 
 # Ensure backend/ is on the Python path so model_inference can be imported
 sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
@@ -54,6 +57,16 @@ TEST_CASES = [
         "expected_intent": "question_answering",
         "description": "Simple question (low complexity)",
     },
+    {
+        "text": "Find why deployment failed and create a GitHub issue",
+        "expected_intent": "tool_use",
+        "description": "Repository automation task",
+    },
+    {
+        "text": "Research current papers about protein folding and provide their citations",
+        "expected_intent": "research",
+        "description": "Research task",
+    },
 ]
 
 
@@ -74,7 +87,7 @@ def main():
     print(f"   Loaded: {_green('Yes') if status['loaded'] else _red('No')}")
     print(f"   Models: {status['models_count']} loaded")
     for m in status['models']:
-        print(f"     ✓ {m}")
+        print(f"     [OK] {m}")
 
     if status['models_count'] == 0:
         print(_red("\n   ERROR: No models loaded! Make sure model/artifacts/ has .joblib files."))
@@ -99,9 +112,9 @@ def main():
         print(f"  {'Recommended Agent:':<25} {d['recommended_agent'] or 'N/A'} (conf: {d['agent_confidence']:.2f})")
         print(f"  {'Est. Latency:':<25} {d['estimated_latency_seconds']:.2f}s" if d['estimated_latency_seconds'] else f"  {'Est. Latency:':<25} N/A")
         print(f"  {'Est. Cost:':<25} ${d['estimated_cost']:.4f}" if d['estimated_cost'] else f"  {'Est. Cost:':<25} N/A")
-        print(f"  {'Approval Required:':<25} {'⚠️  YES' if d['approval_required'] else '✅ No'} (conf: {d['approval_confidence']:.2f})")
+        print(f"  {'Approval Required:':<25} {'WARNING: YES' if d['approval_required'] else 'No'} (conf: {d['approval_confidence']:.2f})")
         print(f"  {'Success Prediction:':<25} {d['success_prediction'] or 'N/A'} (conf: {d['success_confidence']:.2f})")
-        print(f"  {'Anomalous:':<25} {'⚠️  YES' if d['is_anomalous'] else '✅ No'}")
+        print(f"  {'Anomalous:':<25} {'WARNING: YES' if d['is_anomalous'] else 'No'}")
 
         # Basic sanity checks
         checks_passed = True
@@ -137,10 +150,10 @@ def main():
     print(f"\n{_bold('3. Summary')}")
     print("-" * 70)
     if all_passed:
-        print(f"  {_green('ALL TESTS PASSED')} ✅")
+        print(f"  {_green('ALL TESTS PASSED')} [OK]")
         print(f"  {status['models_count']} models loaded, {len(TEST_CASES)} test cases evaluated.")
     else:
-        print(f"  {_red('SOME TESTS FAILED')} ❌")
+        print(f"  {_red('SOME TESTS FAILED')} [FAILED]")
         sys.exit(1)
 
     # 4. Performance test
@@ -152,7 +165,7 @@ def main():
     elapsed = (time.perf_counter() - start) / 10
     print(f"  Average prediction time: {elapsed*1000:.1f}ms per request")
     if elapsed < 0.1:
-        print(f"  {_green('FAST')}: Under 100ms ✅")
+        print(f"  {_green('FAST')}: Under 100ms [OK]")
     elif elapsed < 0.5:
         print(f"  {_yellow('OK')}: Under 500ms")
     else:

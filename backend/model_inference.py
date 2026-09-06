@@ -35,6 +35,45 @@ ARTIFACTS_DIR = Path(__file__).resolve().parent.parent / "model" / "artifacts"
 _models: dict[str, dict] = {}
 _loaded = False
 
+# These heads are only useful when they beat a minimal validation baseline.
+# The bundled corpus has no reliable provider/cost/runtime labels yet, so an
+# artifact may exist without being safe to deploy.
+QUALITY_GATES = {
+    "provider": {"f1": 0.70},
+    "success": {"f1": 0.80, "macro_f1": 0.75},
+    # Public harm labels are not enough to define PrismSpace's operational
+    # approval policy. Require both high recall and precision before this head
+    # can augment the deterministic approval rules.
+    "approval": {"f1": 0.80, "per_class.True.recall": 0.90, "per_class.True.precision": 0.90},
+    "latency": {"r2": 0.20},
+    "cost": {"r2": 0.50},
+}
+
+def _metric_at_path(metrics: dict, path: str) -> float:
+    value = metrics
+    for part in path.split("."):
+        value = value[part]
+    return float(value)
+
+
+def _meets_quality_gate(key: str) -> bool:
+    gate = QUALITY_GATES.get(key)
+    if gate is None:
+        return True
+    report_path = ARTIFACTS_DIR / "training_report.json"
+    try:
+        report = __import__("json").loads(report_path.read_text(encoding="utf-8"))
+        result = next(item for item in report.get("results", []) if item.get("model_name") == key)
+        metrics = result.get("metrics") or {}
+        checks = {metric: _metric_at_path(metrics, metric) for metric in gate}
+        failed = {metric: minimum for metric, minimum in gate.items() if checks[metric] < minimum}
+        if result.get("trained") and not failed:
+            return True
+        LOG.warning("Not deploying %s model: validation gates failed: %s.", key, failed or "model was not trained")
+    except (OSError, StopIteration, TypeError, ValueError, KeyError):
+        LOG.warning("Not deploying %s model: no usable validation report.", key)
+    return False
+
 
 def _load_models() -> None:
     """Load all .joblib model bundles from the artifacts directory."""
@@ -55,6 +94,8 @@ def _load_models() -> None:
 
     for key, filename in artifact_files.items():
         path = ARTIFACTS_DIR / filename
+        if not _meets_quality_gate(key):
+            continue
         if path.exists():
             try:
                 _models[key] = joblib.load(path)
@@ -106,6 +147,9 @@ INTENT_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("image_classification", (r"\bclassify (this )?(image|photo|picture)\b", r"\bimage classification\b", r"\brecognize (this )?(image|photo|picture)\b")),
     ("translation", (r"\btranslate\b", r"\btranslation\b", r"\bconvert .+ to (english|french|spanish|german|chinese|japanese)\b")),
     ("summarization", (r"\bsummari[sz]e\b", r"\bsummarization\b", r"\btl;dr\b")),
+    ("file_management", (r"\b(rename|move|copy|organize|organise|list) (the |my )?(files?|folders?|directories)\b", r"\bfile management\b")),
+    ("research", (r"\b(research|investigate|literature review)\b", r"\b(search|look up|find) (the )?(web|internet|papers?|sources?)\b")),
+    ("tool_use", (r"\b(function|tool|api) call(?:ing)?\b", r"\buse (the |an? )?(api|tool|browser)\b", r"\bcreate (a )?github issue\b")),
     ("code_generation", (r"\b(write|generate|create) (a |some )?(python|javascript|typescript|java|sql|code)\b", r"\bcode generation\b", r"\bimplement (a |the )?(function|class|api)\b")),
     ("question_answering", (r"\b(question answering|answer this question)\b", r"^(what|who|when|where|why|how)\b")),
     ("text_generation", (r"\b(generate|write|compose|draft)\b", r"\b(short )?story\b", r"\btext generation\b")),
@@ -138,8 +182,10 @@ def _predict_class(model_key: str, features: pd.DataFrame) -> tuple[Optional[str
 
         pred = model.predict(features)
 
-        # Get confidence from predict_proba if available
+        # Get confidence from predict_proba if available.  Approval may carry
+        # a validated high-recall decision threshold in its training bundle.
         confidence = 0.0
+        proba = None
         try:
             proba = model.predict_proba(features)
             confidence = float(np.max(proba))
@@ -153,6 +199,12 @@ def _predict_class(model_key: str, features: pd.DataFrame) -> tuple[Optional[str
             label = ", ".join(labels[0]) if labels[0] else "general"
             return label, confidence
         elif isinstance(label_enc, LabelEncoder):
+            threshold = bundle.get("decision_threshold")
+            positive_label = bundle.get("positive_label")
+            if threshold is not None and positive_label in label_enc.classes_ and proba is not None:
+                positive_index = list(label_enc.classes_).index(positive_label)
+                label = positive_label if float(proba[0][positive_index]) >= float(threshold) else next(label for label in label_enc.classes_ if label != positive_label)
+                return str(label), confidence
             # Single label: pred is [42], inverse_transform returns ['Text Generation']
             label = label_enc.inverse_transform(pred.astype(int))[0]
             return str(label), confidence
@@ -381,7 +433,11 @@ def analyze_request(text: str) -> IntelligenceResult:
     result.success_prediction, result.success_confidence = _predict_class("success", features)
 
     # 5. Approval Detection (rule-based — ML model has <0.2% labeled data)
-    result.approval_required, result.approval_confidence = _check_approval(text)
+    rule_required, rule_confidence = _check_approval(text)
+    approval_label, model_confidence = _predict_class("approval", features)
+    model_required = str(approval_label).strip().lower() in {"true", "1", "yes", "approval", "required"}
+    result.approval_required = rule_required or model_required
+    result.approval_confidence = max(rule_confidence if rule_required else 0.0, model_confidence if model_required else 0.0, 0.10 if not result.approval_required else 0.0)
 
     # 6. Latency Estimation (heuristic — ML model only had 1.4% labeled data)
     word_count = len(text.split())

@@ -80,9 +80,48 @@ TOOLS_ENV_PATH = os.path.join(TOOLS_DIR, ".env")
 
 # Workspace root: parent of the backend directory (i.e. prismspace-web/)
 WORKSPACE_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+RUNTIME_EVENTS_PATH = pathlib.Path(WORKSPACE_ROOT) / "model" / "datasets" / "prismspace_runtime_events.jsonl"
 
 # Hive backend directory (where most filesystem operations should happen by default)
 HIVE_BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def _record_runtime_event(agent: dict, request: "CreateAgentRequest", started: float) -> None:
+    """Append a privacy-bounded training record for a completed PrismSpace run."""
+    result = str(agent.get("result") or "")
+    intelligence = agent.get("intelligence") or {}
+    event = {
+        "text": request.objective,
+        "objective": request.objective,
+        "selected_agents": intelligence.get("recommended_agent", "general"),
+        "provider": request.provider,
+        "recommended_provider": intelligence.get("recommended_provider", ""),
+        "provider_confidence": intelligence.get("provider_confidence", ""),
+        "model": request.model,
+        "success": agent.get("status") == "completed",
+        "status": agent.get("status"),
+        "approval_required": request.human_in_loop,
+        "approval_model_prediction": intelligence.get("approval_required", ""),
+        "approval_confidence": intelligence.get("approval_confidence", ""),
+        "success_prediction": intelligence.get("success_prediction", ""),
+        "success_confidence": intelligence.get("success_confidence", ""),
+        "latency_ms": round((time.perf_counter() - started) * 1000, 2),
+        "token_cost": "",
+        "retries": 0,
+        "tool_failures": 0,
+        "workflow_dag": agent.get("selected_agents", []),
+        "accepted": result[:20_000] if agent.get("status") == "completed" else "",
+        "rejected": result[:20_000] if agent.get("status") != "completed" else "",
+        "_source": "prismspace_runtime",
+        "recorded_at": datetime.utcnow().isoformat(),
+    }
+    try:
+        RUNTIME_EVENTS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with RUNTIME_EVENTS_PATH.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(event, ensure_ascii=False) + "\n")
+    except OSError as exc:
+        # Telemetry must never make an agent run fail.
+        _log(agent.get("id", "runtime"), f"[WARN] Could not persist runtime telemetry: {exc}")
 
 # ---------------------------------------------------------------------------
 # Helper: Smart path resolution
@@ -1246,6 +1285,7 @@ async def _run_hive_agent(agent_id: str, request: CreateAgentRequest) -> None:
     based on the selected provider.
     """
     agent = _agents[agent_id]
+    started = time.perf_counter()
 
     try:
         _log(agent_id, f"Initialising Hive runtime ({request.provider}/{request.model})")
@@ -1259,6 +1299,7 @@ async def _run_hive_agent(agent_id: str, request: CreateAgentRequest) -> None:
 
         _log(agent_id, f"Spawning {request.max_agents} specialised sub-agents")
         sub_agents = [f"Agent-{chr(65+i)}" for i in range(request.max_agents)]
+        agent["selected_agents"] = sub_agents
         for sa in sub_agents:
             _log(agent_id, f"   -> {sa} ready")
             await asyncio.sleep(0.15)
@@ -1327,6 +1368,8 @@ async def _run_hive_agent(agent_id: str, request: CreateAgentRequest) -> None:
         error_msg = str(exc)
         agent["result"] = f"Error: {error_msg}"
         _log(agent_id, f"[ERROR] Agent failed: {error_msg}")
+    finally:
+        _record_runtime_event(agent, request, started)
 
 
 # ---------------------------------------------------------------------------

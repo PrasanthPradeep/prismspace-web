@@ -14,6 +14,7 @@ from sklearn.preprocessing import LabelEncoder, MultiLabelBinarizer, StandardSca
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import IsolationForest
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import precision_recall_curve
 from xgboost import XGBClassifier, XGBRegressor
 
 def _xgb_device() -> str:
@@ -31,7 +32,7 @@ def _xgb_device() -> str:
 
 from .dataset_loader import DatasetLoader
 from .feature_engineering import FeatureEngineer
-from .metrics import classification_metrics, regression_metrics
+from .metrics import classification_metrics, multilabel_metrics, regression_metrics
 from .utils import get_logger, write_json
 
 LOG = get_logger(__name__)
@@ -64,14 +65,17 @@ class TabularTrainer:
         preprocessor = ColumnTransformer([("text", TfidfVectorizer(ngram_range=(1,2), max_features=10000, token_pattern=r"(?u)\b\w+\b"), "text"), ("num", Pipeline([("impute",SimpleImputer()),("scale",StandardScaler())]), num_cols)])
         num_only_preprocessor = ColumnTransformer([("num", Pipeline([("impute",SimpleImputer()),("scale",StandardScaler())]), num_cols)])
         if self.task == "multilabel":
-            labels = y.map(lambda v: [x.strip() for x in v.strip("[]").replace("'", "").split(",") if x.strip()]); encoder = MultiLabelBinarizer(); encoded = encoder.fit_transform(labels)
+            labels = y.map(lambda v: [x.strip() for x in v.strip("[]").replace("'", "").split(",") if x.strip()])
+            Xtr, Xte, ytr, yte = train_test_split(X, labels, test_size=.2, random_state=self.seed)
+            encoder = MultiLabelBinarizer(); encoded = encoder.fit_transform(ytr); encoded_test = encoder.transform(yte)
             from sklearn.multiclass import OneVsRestClassifier
             estimator = OneVsRestClassifier(LogisticRegression(max_iter=1000, class_weight="balanced")); model = Pipeline([("features",preprocessor),("model",estimator)])
-            try: model.fit(X, encoded)
+            try: model.fit(Xtr, encoded)
             except ValueError:
                 LOG.warning("%s: TF-IDF produced empty vocabulary; falling back to numeric-only features.", self.name)
-                model = Pipeline([("features",num_only_preprocessor),("model",estimator)]); model.fit(X, encoded)
-            bundle={"model":model,"label_encoder":encoder,"target":target}; metrics={"samples":len(y),"labels":len(encoder.classes_)}
+                model = Pipeline([("features",num_only_preprocessor),("model",estimator)]); model.fit(Xtr, encoded)
+            prediction = model.predict(Xte)
+            bundle={"model":model,"label_encoder":encoder,"target":target}; metrics={"samples":len(y), "train_samples":len(ytr), "validation_samples":len(yte), "labels":len(encoder.classes_), **multilabel_metrics(encoded_test, prediction, encoder.classes_)}
         else:
             label_enc = None
             stratify = y if self.task == "classification" and y.value_counts().min() >= 2 else None
@@ -91,14 +95,39 @@ class TabularTrainer:
                 model=Pipeline([("features",num_only_preprocessor),("model",estimator)]); model.fit(Xtr,ytr)
             pred=model.predict(Xte)
             if label_enc is not None:
+                probabilities = model.predict_proba(Xte)
                 pred_labels = label_enc.inverse_transform(pred); yte_labels = label_enc.inverse_transform(yte)
-                metrics = classification_metrics(yte_labels, pred_labels, model.predict_proba(Xte))
+                decision_threshold = None
+                positive_label = None
+                # Approval is safety-sensitive: tune a threshold that reaches
+                # 90% positive-class recall while retaining the best F1.
+                if self.name == "approval" and len(label_enc.classes_) == 2 and "True" in label_enc.classes_:
+                    positive_label = "True"
+                    positive_index = list(label_enc.classes_).index(positive_label)
+                    truth = (yte_labels == positive_label).astype(int)
+                    precision, recall, thresholds = precision_recall_curve(truth, probabilities[:, positive_index])
+                    f1_scores = 2 * precision[:-1] * recall[:-1] / np.maximum(precision[:-1] + recall[:-1], 1e-12)
+                    candidates = np.flatnonzero(recall[:-1] >= 0.90)
+                    if len(candidates):
+                        chosen = candidates[np.argmax(f1_scores[candidates])]
+                        decision_threshold = float(thresholds[chosen])
+                        pred_labels = np.where(probabilities[:, positive_index] >= decision_threshold, positive_label, "False")
+                metrics = classification_metrics(yte_labels, pred_labels, probabilities)
             else:
                 metrics = regression_metrics(yte, pred)
             bundle={"model":model,"target":target,"task":self.task,"label_encoder":label_enc}
+            if label_enc is not None and self.name == "approval" and decision_threshold is not None:
+                bundle.update({"decision_threshold": decision_threshold, "positive_label": positive_label})
         artifact_names = {"intent": "intent_classifier", "agent": "agent_router", "provider": "model_router", "success": "workflow_success_predictor", "approval": "approval_predictor", "latency": "latency_predictor", "cost": "cost_predictor"}
         path=self.output_dir / f"{artifact_names.get(self.name, self.name + '_predictor')}.joblib"; joblib.dump(bundle,path); write_json(self.output_dir / "logs" / f"{self.name}_metrics.json",metrics)
         return TrainResult(self.name,True,metrics=metrics)
 
     def fit_anomaly(self, frame: pd.DataFrame) -> TrainResult:
-        x=FeatureEngineer().transform(frame).numeric; model=IsolationForest(random_state=self.seed, contamination="auto").fit(x); joblib.dump({"model":model},self.output_dir/"anomaly_detector.joblib"); return TrainResult("anomaly",True,metrics={"samples":len(x)})
+        x=FeatureEngineer().transform(frame).numeric
+        x_train, x_validation = train_test_split(x, test_size=.2, random_state=self.seed)
+        validation_model=IsolationForest(random_state=self.seed, contamination="auto").fit(x_train)
+        validation_predictions=validation_model.predict(x_validation)
+        # Refit on all known-normal/unknown data for the deployed detector after validation.
+        model=IsolationForest(random_state=self.seed, contamination="auto").fit(x)
+        joblib.dump({"model":model},self.output_dir/"anomaly_detector.joblib")
+        return TrainResult("anomaly",True,metrics={"samples":len(x), "validation_samples":len(x_validation), "validation_anomaly_rate":float((validation_predictions == -1).mean()), "note":"Unsupervised detector: labelled anomaly precision/recall requires reviewed production anomaly labels."})
