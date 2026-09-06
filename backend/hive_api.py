@@ -44,6 +44,14 @@ except ImportError:
     def _ml_analyze(text): return None
     def _ml_status(): return {"loaded": False, "models_count": 0, "models": []}
 
+# Per-user Gmail OAuth (multi-user MCP)
+try:
+    import google_oauth as _gmail_oauth
+    _GMAIL_OAUTH_AVAILABLE = True
+except ImportError:
+    _GMAIL_OAUTH_AVAILABLE = False
+    _gmail_oauth = None  # type: ignore
+
 # ---------------------------------------------------------------------------
 # App setup
 # ---------------------------------------------------------------------------
@@ -176,11 +184,12 @@ class ChatContextMessage(BaseModel):
 
 class CreateAgentRequest(BaseModel):
     objective: str
-    model: str = "z-ai/glm-5.2"       # any Hive-supported model
+    model: str = "nvidia/nemotron-3.5-lightning-30b-a3b"  # NVIDIA NIM
     provider: str = "nvidia"           # nvidia | groq
     max_agents: int = 3
     human_in_loop: bool = True
     chat_history: list[ChatContextMessage] = Field(default_factory=list)
+    user_id: Optional[str] = None  # per-user Gmail MCP owner (Google sub)
 
 
 class ApproveAgentRequest(BaseModel):
@@ -474,6 +483,17 @@ def _build_system_prompt() -> str:
     except (FileNotFoundError, json.JSONDecodeError):
         pass  # No MCP config found, use base prompt
 
+    # Per-user Gmail MCP is always available via OAuth (not mcp_servers.json)
+    base += (
+        "\n## Gmail MCP (per-user OAuth, LIVE)\n"
+        "The user has connected their own Google account via OAuth. Use these tools when asked about email:\n"
+        '- `gmail_list_messages(query, max_results)` — e.g. {"tool":"gmail_list_messages","arguments":{"query":"is:unread","max_results":5}}\n'
+        '- `gmail_get_message(message_id, format)` — format metadata|full|minimal\n'
+        '- `gmail_list_labels()` — list INBOX/SENT/etc.\n'
+        '- `send_email(to, subject, body)` — sends a real email via the user\'s Gmail; use for send requests\n'
+        "Emit exactly one JSON tool call then STOP.\n\n"
+    )
+
     return base
 
 
@@ -620,16 +640,20 @@ async def _call_google(
 
 
 async def _call_nvidia(
-    model: str, 
-    objective: str, 
+    model: str,
+    objective: str,
     chat_history: list[ChatContextMessage] | list[dict[str, str]]
 ) -> str:
-    """Call NVIDIA NIM API (OpenAI-compatible) with streaming, reasoning budget, and stop sequences."""
+    """Call NVIDIA NIM API (OpenAI-compatible) for nvidia/nemotron-3.5-lightning-30b-a3b with thinking."""
     from openai import AsyncOpenAI
     client = AsyncOpenAI(
         base_url="https://integrate.api.nvidia.com/v1",
-        api_key=os.environ.get("NVIDIA_API_KEY", "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"),
+        api_key=os.environ.get("NVIDIA_API_KEY", "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"),
     )
+
+    # Retired models -> remap to Lightning (nemotron-3-nano EOL 2026-09-01, gemma-4 too slow)
+    if not model or any(s in (model or "") for s in ("nemotron-3-nano", "glm-5", "gemma-4")):
+        model = "nvidia/nemotron-3.5-lightning-30b-a3b"
     
     # Handle both ChatContextMessage objects and raw dicts
     if chat_history and isinstance(chat_history[0], dict):
@@ -650,9 +674,9 @@ async def _call_nvidia(
         model=model,
         messages=final_messages,
         temperature=1,
-        top_p=1,
+        top_p=0.95,
         max_tokens=16384,
-        extra_body={"reasoning_budget": 16384},
+        extra_body={"chat_template_kwargs": {"enable_thinking": True}, "reasoning_budget": 16384},
         stop=["```\n\n", "```\n", "\n\n\n"],  # Stop after tool call code blocks
         stream=True,
     )
@@ -660,6 +684,7 @@ async def _call_nvidia(
         if not chunk.choices:
             continue
         delta = chunk.choices[0].delta
+        # reasoning_content is thinking trace — skip it, only tool-call content matters
         if getattr(delta, "content", None) is not None:
             chunks.append(delta.content)
     result = "".join(chunks)
@@ -1011,7 +1036,63 @@ def _exec_memory(args: dict, operation: str) -> str:
     return f"Unknown memory operation: {operation}"
 
 
-def _dispatch_tool(tool_call: dict) -> str:
+def _exec_gmail(tool: str, args: dict, user_id: Optional[str] = None) -> str:
+    """Per-user Gmail executor. Uses the calling user's OAuth token, never the shared .env."""
+    import httpx as _httpx
+    token: Optional[str] = None
+    if _GMAIL_OAUTH_AVAILABLE and user_id:
+        try:
+            token = _gmail_oauth.get_valid_access_token(user_id)  # type: ignore
+        except Exception as exc:
+            return f"Gmail auth error for user {user_id}: {exc}"
+    if not token:  # admin fallback (single-user dev)
+        token = os.environ.get("GOOGLE_ACCESS_TOKEN", "")
+    if not token:
+        return ("Gmail not connected. User must click 'Connect Gmail' "
+                "(GET /api/auth/google/login) and complete OAuth first.")
+    base = "https://gmail.googleapis.com/gmail/v1/users/me"
+    hdr = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    try:
+        if tool == "gmail_list_messages":
+            r = _httpx.get(f"{base}/messages", headers=hdr,
+                           params={"q": args.get("query", "is:unread"),
+                                   "maxResults": max(1, min(500, int(args.get("max_results", 10))))},
+                           timeout=20.0)
+        elif tool == "gmail_get_message":
+            mid = str(args.get("message_id", ""))
+            if not mid or "/" in mid or ".." in mid:
+                return "Error: valid message_id is required"
+            r = _httpx.get(f"{base}/messages/{mid}", headers=hdr,
+                           params={"format": args.get("format", "metadata")}, timeout=20.0)
+        elif tool == "gmail_list_labels":
+            r = _httpx.get(f"{base}/labels", headers=hdr, timeout=20.0)
+        elif tool in ("gmail_send_message", "gmail_send_email", "send_email"):
+            import base64 as _b64
+            from email.mime.text import MIMEText as _MIMEText
+            to = str(args.get("to", "") or args.get("recipient", "") or args.get("to_email", "")).strip()
+            subject = str(args.get("subject", "") or "(no subject)")
+            body = str(args.get("body", "") or args.get("html", "") or args.get("content", "") or args.get("text", ""))
+            if not to or "@" not in to:
+                return "Error: valid 'to' email address is required"
+            if not body:
+                return "Error: email 'body' is required"
+            msg = _MIMEText(body, "plain", "utf-8")
+            msg["To"] = to
+            msg["Subject"] = subject
+            raw = _b64.urlsafe_b64encode(msg.as_bytes()).decode("ascii")
+            r = _httpx.post(f"{base}/messages/send", headers=hdr, json={"raw": raw}, timeout=20.0)
+        else:
+            return f"Gmail tool '{tool}' needs approval — supported: list/get/labels/send."
+        if r.status_code == 401:
+            return "Gmail token expired. Reconnect via Connect Gmail."
+        if r.status_code != 200:
+            return f"Gmail API error ({r.status_code}): {r.text[:500]}"
+        return json.dumps(r.json(), indent=2, default=str)[:8000]
+    except Exception as exc:
+        return f"Gmail request failed: {exc}"
+
+
+def _dispatch_tool(tool_call: dict, user_id: Optional[str] = None) -> str:
     """Dispatch a parsed tool call to the correct executor."""
     tool = tool_call.get("tool", "").lower()
     args = tool_call.get("arguments", {})
@@ -1044,6 +1125,10 @@ def _dispatch_tool(tool_call: dict) -> str:
     # Memory tools
     if tool in ("set_memory", "get_memory", "list_memory", "delete_memory"):
         return _exec_memory(args, tool)
+
+    # Per-user Gmail MCP (read + send)
+    if tool.startswith("gmail_") or tool == "send_email":
+        return _exec_gmail(tool, args, user_id)
 
     return (
         f"Tool '{tool}' was recognised but has no local executor. "
@@ -1135,7 +1220,11 @@ async def _tool_use_loop(
                     "- set_memory: Store a value in memory\n"
                     "- get_memory: Retrieve a value from memory\n"
                     "- read_query: Execute SQL SELECT query\n"
-                    "- write_query: Execute SQL INSERT/UPDATE/DELETE\n\n"
+                    "- write_query: Execute SQL INSERT/UPDATE/DELETE\n"
+                    "- gmail_list_messages: List Gmail (query, max_results)\n"
+                    "- gmail_get_message: Read one email (message_id, format)\n"
+                    "- gmail_list_labels: List Gmail labels\n"
+                    "- send_email: Send email via Gmail (to, subject, body)\n\n"
                     
                     f"Original user request: {request.objective}\n\n"
                     
@@ -1211,7 +1300,7 @@ async def _tool_use_loop(
             
             _log(agent_id, f"   [{idx}/{len(tool_calls)}] Executing `{tool_name}` with args: {json.dumps(tool_args, ensure_ascii=False)[:100]}...")
             
-            result = _dispatch_tool(tc)
+            result = _dispatch_tool(tc, getattr(request, "user_id", None))
             preview = result[:150].replace("\n", " ")
             _log(agent_id, f"   ✓ `{tool_name}` returned {len(result)} chars: {preview}...")
             
@@ -1553,6 +1642,7 @@ async def create_agent(
         "provider": request.provider,
         "max_agents": request.max_agents,
         "human_in_loop": request.human_in_loop,
+        "user_id": request.user_id,
         "status": "initialising",
         "created_at": now,
         "updated_at": now,
@@ -1670,6 +1760,48 @@ async def intelligence_endpoint(text: str):
         raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+# ---------------------------------------------------------------------------
+# Per-user Gmail OAuth (production multi-user MCP)
+# ---------------------------------------------------------------------------
+
+@app.get("/api/auth/google/login")
+async def google_login():
+    """Return Google consent URL. Frontend redirects user there (1-click Connect)."""
+    if not _GMAIL_OAUTH_AVAILABLE:
+        raise HTTPException(status_code=503, detail="google_oauth module not available")
+    try:
+        return {"url": _gmail_oauth.build_login_url(state="prism")}  # type: ignore
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.get("/api/auth/google/callback")
+async def google_callback(code: str = "", state: str = ""):
+    """Exchange ?code for tokens, store per user_id. Called after Google consent."""
+    if not _GMAIL_OAUTH_AVAILABLE:
+        raise HTTPException(status_code=503, detail="google_oauth module not available")
+    if not code:
+        raise HTTPException(status_code=400, detail="Missing ?code")
+    try:
+        return _gmail_oauth.exchange_code(code)  # type: ignore
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.get("/api/gmail/status")
+async def gmail_status(user_id: str = ""):
+    if not _GMAIL_OAUTH_AVAILABLE or not user_id:
+        return {"connected": False}
+    return _gmail_oauth.get_status(user_id)  # type: ignore
+
+
+@app.post("/api/gmail/disconnect")
+async def gmail_disconnect(body: dict):
+    if _GMAIL_OAUTH_AVAILABLE and body.get("user_id"):
+        _gmail_oauth.disconnect(body["user_id"])  # type: ignore
+    return {"ok": True}
 
 
 # ---------------------------------------------------------------------------

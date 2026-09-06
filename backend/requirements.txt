@@ -9,3 +9,4 @@ groq>=0.15.0           # Groq API client
 openai>=1.40.0         # OpenAI API client (also used for Anthropic-compatible calls)
 google-genai>=1.0.0    # Google Gemini API client
 anthropic>=0.40.0      # Anthropic API client
+cryptography>=41.0.0   # FERNET_KEY encryption for per-user Gmail tokens

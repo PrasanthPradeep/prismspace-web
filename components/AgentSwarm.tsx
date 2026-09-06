@@ -172,6 +172,9 @@ import {
   listMcpServers,
   saveMcpToken,
   removeMcpToken,
+  connectGmail,
+  gmailStatus,
+  getGmailUserId,
   STATUS_COLORS,
   STATUS_LABELS,
   isTerminal,
@@ -190,7 +193,7 @@ interface AgentSwarmProps {
 }
 
 const MODELS: Record<ModelProvider, string[]> = {
-  nvidia: ['nvidia/nemotron-3-nano-30b-a3b'],
+  nvidia: ['nvidia/nemotron-3.5-lightning-30b-a3b'],
   groq: ['llama-3.3-70b-versatile', 'llama3-70b-8192', 'mixtral-8x7b-32768'],
 };
 
@@ -239,6 +242,38 @@ export function AgentSwarm({ onClose }: AgentSwarmProps) {
   const [maxAgents, setMaxAgents] = useState(3);
   const [hitl, setHitl] = useState(true);
   const [launching, setLaunching] = useState(false);
+
+  // Per-user Gmail MCP
+  const [gmailEmail, setGmailEmail] = useState<string | null>(
+    typeof window !== 'undefined' ? localStorage.getItem('prism_gmail_email') : null,
+  );
+  const [gmailLoading, setGmailLoading] = useState(false);
+
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const uid = q.get('gmail_user_id');
+    const email = q.get('gmail_email');
+    if (uid) localStorage.setItem('prism_gmail_user_id', uid);
+    if (email) {
+      localStorage.setItem('prism_gmail_email', email);
+      setGmailEmail(email);
+    }
+    const stored = uid ?? getGmailUserId();
+    if (stored) {
+      gmailStatus(stored)
+        .then((s) => {
+          if (s.connected) {
+            setGmailEmail(s.email ?? email ?? null);
+            if (s.email) localStorage.setItem('prism_gmail_email', s.email);
+          } else {
+            setGmailEmail(null);
+            localStorage.removeItem('prism_gmail_email');
+          }
+        })
+        .catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Tab navigation
   const [sidebarTab, setSidebarTab] = useState<'launch' | 'chats' | 'mcp'>('launch');
@@ -589,8 +624,8 @@ export function AgentSwarm({ onClose }: AgentSwarmProps) {
   const activeAgents = agents.filter((agent) => !isTerminal(agent.status)).length;
   const completedAgents = agents.filter((agent) => agent.status === 'completed').length;
   const selectedAgentModelLabel =
-    selectedAgent?.model === 'nvidia/nemotron-3-nano-30b-a3b'
-      ? 'NVIDIA NIM / Nemotron'
+    selectedAgent?.model === 'nvidia/nemotron-3.5-lightning-30b-a3b'
+      ? 'NVIDIA NIM / Lightning'
       : selectedAgent
       ? selectedAgent.model.startsWith(selectedAgent.provider)
         ? selectedAgent.model
@@ -811,10 +846,57 @@ export function AgentSwarm({ onClose }: AgentSwarmProps) {
                     onChange={setModel}
                     options={MODELS[provider].map((m) => ({
                       value: m,
-                      label: m === 'nvidia/nemotron-3-nano-30b-a3b' ? 'Nemotron' : m,
+                      label: m === 'nvidia/nemotron-3.5-lightning-30b-a3b' ? 'Lightning' : m,
                     }))}
                   />
                 </div>
+              </section>
+
+              <section className="rounded-xl border border-white/10 bg-white/[0.035] p-4">
+                <span className={controlLabelClass}>Gmail MCP</span>
+                {gmailEmail ? (
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate text-xs text-emerald-300">✓ {gmailEmail}</span>
+                    <button
+                      type="button"
+                      className="rounded-lg border border-white/10 px-2 py-1 text-[11px] text-white/60 hover:text-white"
+                      onClick={() => {
+                        const uid = getGmailUserId();
+                        if (uid) {
+                          fetch('/api/auth/google/status', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ user_id: uid }),
+                          }).catch(() => {});
+                        }
+                        localStorage.removeItem('prism_gmail_user_id');
+                        localStorage.removeItem('prism_gmail_email');
+                        setGmailEmail(null);
+                      }}
+                    >
+                      Disconnect
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={gmailLoading}
+                    className="w-full rounded-lg bg-emerald-400/90 px-3 py-2 text-sm font-semibold text-[#06110b] disabled:opacity-50"
+                    onClick={async () => {
+                      setGmailLoading(true);
+                      try {
+                        await connectGmail();
+                      } catch (e) {
+                        console.error(e);
+                      } finally {
+                        setGmailLoading(false);
+                      }
+                    }}
+                  >
+                    {gmailLoading ? 'Connecting…' : 'Connect Gmail'}
+                  </button>
+                )}
+                <p className="mt-1.5 text-[11px] text-white/40">Agents use your inbox via per-user OAuth.</p>
               </section>
 
               <section className="rounded-xl border border-white/10 bg-white/[0.035] p-4">

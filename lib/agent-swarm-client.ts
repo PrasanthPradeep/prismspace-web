@@ -69,6 +69,27 @@ export interface CreateAgentPayload {
   max_agents?: number;
   human_in_loop?: boolean;
   chat_history?: AgentChatContextMessage[];
+  user_id?: string;
+}
+
+// Per-user Gmail owner stored after OAuth callback (?gmail_user_id=...)
+export function getGmailUserId(): string | null {
+  if (typeof window === 'undefined') return null;
+  const q = new URLSearchParams(window.location.search).get('gmail_user_id');
+  if (q) localStorage.setItem('prism_gmail_user_id', q);
+  return localStorage.getItem('prism_gmail_user_id');
+}
+
+export async function connectGmail(): Promise<void> {
+  const res = await fetch('/api/auth/google/login', { cache: 'no-store' });
+  const data = await res.json();
+  if (data.url) window.location.href = data.url;
+  else throw new Error(data.detail ?? 'Login URL failed');
+}
+
+export async function gmailStatus(user_id: string) {
+  const res = await fetch(`/api/auth/google/status?user_id=${encodeURIComponent(user_id)}`, { cache: 'no-store' });
+  return res.json();
 }
 
 const BASE = '/api/agent-swarm';
@@ -93,6 +114,7 @@ export async function createAgent(payload: CreateAgentPayload): Promise<SwarmAge
       max_agents: payload.max_agents ?? 3,
       human_in_loop: payload.human_in_loop ?? true,
       chat_history: payload.chat_history ?? [],
+      user_id: payload.user_id ?? getGmailUserId() ?? undefined,
     }),
   });
   if (!res.ok) throw new Error(`Failed to create agent: ${res.status}`);

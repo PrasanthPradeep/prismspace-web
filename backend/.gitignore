@@ -16,3 +16,6 @@ hive/
 # Env / secrets
 .env
 *.env.local
+
+# Per-user OAuth token database — never commit
+user_tokens.db
