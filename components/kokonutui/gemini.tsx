@@ -1,3 +1,7 @@
+/**
+ * Copyright 2026 Nobin Sijo (NobinSijo7T).
+ * SPDX-License-Identifier: Apache-2.0
+ */
 const Gemini = (props: React.SVGProps<SVGSVGElement>) => (
   <svg
     height="1em"

@@ -1,3 +1,5 @@
+# Copyright 2026 Nobin Sijo (NobinSijo7T).
+# SPDX-License-Identifier: Apache-2.0
 """Behavioral stress tests for the active model-inference artifacts.
 
 Run from the project root:

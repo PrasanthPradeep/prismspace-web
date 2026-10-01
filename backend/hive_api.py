@@ -1,3 +1,5 @@
+# Copyright 2026 Nobin Sijo (NobinSijo7T).
+# SPDX-License-Identifier: Apache-2.0
 """
 Hive Multi-Agent Backend Bridge
 ================================
@@ -20,7 +22,9 @@ import json
 import os
 import pathlib
 import re
+import shlex
 import sqlite3
+import subprocess
 import time
 import uuid
 import shutil
@@ -34,6 +38,8 @@ from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+
+from os_tools import DESTRUCTIVE_OS_TOOLS, execute_os_tool
 
 # ML Model Inference
 try:
@@ -81,6 +87,13 @@ _agents: dict[str, dict] = {}
 
 # agent_id -> list of log lines
 _logs: dict[str, list[str]] = {}
+
+# Per-agent approval and cancellation state. These are intentionally kept out
+# of the JSON agent object so API responses remain serializable.
+_tool_approval_events: dict[str, asyncio.Event] = {}
+_tool_approval_decisions: dict[str, bool] = {}
+_active_operations: dict[str, subprocess.Popen] = {}
+_cancelled_operations: set[str] = set()
 
 TOOLS_DIR = os.path.join(os.path.dirname(__file__), "hive", "tools")
 MCP_SERVERS_PATH = os.path.join(TOOLS_DIR, "mcp_servers.json")
@@ -185,11 +198,13 @@ class ChatContextMessage(BaseModel):
 class CreateAgentRequest(BaseModel):
     objective: str
     model: str = "nvidia/nemotron-3.5-lightning-30b-a3b"  # NVIDIA NIM
-    provider: str = "nvidia"           # nvidia | groq
+    provider: str = "nvidia"           # nvidia | groq | openai | anthropic | google | openrouter | deepseek
+    api_key: Optional[str] = None      # BYOK user key
     max_agents: int = 3
     human_in_loop: bool = True
     chat_history: list[ChatContextMessage] = Field(default_factory=list)
     user_id: Optional[str] = None  # per-user Gmail MCP owner (Google sub)
+    worker_models: list[dict[str, str]] = Field(default_factory=list)
 
 
 class ApproveAgentRequest(BaseModel):
@@ -244,12 +259,80 @@ def _mask_token(value: str) -> str:
     return f"{value[:4]}...{value[-4:]}"
 
 
+DEFAULT_MCP_SERVERS = {
+    "figma": {
+        "transport": "stdio",
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-figma"],
+        "description": "Inspect Figma design files, components, styles, design tokens, and export vector/raster assets.",
+        "env": {"FIGMA_API_TOKEN": "${FIGMA_API_TOKEN}"},
+    },
+    "google_drive": {
+        "transport": "stdio",
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-gdrive"],
+        "description": "Search, read, create, and manage Google Docs, Sheets, Slides, and Drive folder structures.",
+        "env": {"GOOGLE_DRIVE_CREDENTIALS": "${GOOGLE_DRIVE_CREDENTIALS}"},
+    },
+    "gmail": {
+        "transport": "stdio",
+        "command": "python",
+        "args": ["google_oauth.py"],
+        "description": "Read, draft, search, and send emails, process incoming notifications, and manage threads via Google OAuth.",
+        "env": {"GMAIL_CLIENT_SECRET": "${GMAIL_CLIENT_SECRET}"},
+    },
+    "github": {
+        "transport": "stdio",
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-github"],
+        "description": "Access repositories, code trees, pull requests, issues, commits, branches, and code reviews.",
+        "env": {"GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_PERSONAL_ACCESS_TOKEN}"},
+    },
+    "filesystem": {
+        "transport": "stdio",
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-filesystem", "."],
+        "description": "Local sandboxed workspace filesystem access: search, read, write, edit, and inspect directory trees.",
+        "env": {"ALLOWED_DIRECTORIES": "${ALLOWED_DIRECTORIES}"},
+    },
+    "terminal": {
+        "transport": "in-process",
+        "command": "internal",
+        "args": [],
+        "description": "Run approved shell commands in the local workspace for search, builds, scripts, and file operations.",
+        "env": {},
+    },
+    "sqlite": {
+        "transport": "in-process",
+        "command": "internal",
+        "args": [],
+        "description": "Structured local relational storage for persistence, telemetry, and fast queryable tables.",
+        "env": {"SQLITE_DB_PATH": "${SQLITE_DB_PATH}"},
+    },
+    "memory": {
+        "transport": "in-process",
+        "command": "internal",
+        "args": [],
+        "description": "Cross-session key-value memory store for persisting facts, user preferences, and intermediate results.",
+        "env": {},
+    },
+}
+
+
 def _load_mcp_servers() -> dict:
     try:
         with open(MCP_SERVERS_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
+            data = json.load(f)
+            if data and isinstance(data, dict):
+                return data
     except (FileNotFoundError, json.JSONDecodeError):
-        return {}
+        pass
+
+    try:
+        _write_mcp_servers(DEFAULT_MCP_SERVERS)
+    except Exception:
+        pass
+    return DEFAULT_MCP_SERVERS.copy()
 
 
 def _write_mcp_servers(mcp_servers: dict) -> None:
@@ -427,6 +510,23 @@ def _build_system_prompt() -> str:
                     base += "\nTo use Figma tools, the user provides a Figma file URL like:\n"
                     base += "  `https://www.figma.com/file/ABC123/MyDesign`\n"
                     base += "The file key is the `ABC123` portion after `/file/`.\n"
+                elif name == "google_drive":
+                    gdrive_token_set = resolved_env.get("GOOGLE_DRIVE_CREDENTIALS", "✗ NOT SET")
+                    base += f"\n**Google Drive MCP is ACTIVE** (Credentials: {gdrive_token_set})\n"
+                    base += "You can use the Google Drive MCP to:\n"
+                    base += "- Search files and folders: `gdrive_search(query)`\n"
+                    base += "- Read Google Docs and Sheets: `gdrive_read(file_id)`\n"
+                    base += "- Create files and upload docs: `gdrive_create(name, content, mime_type)`\n"
+                    base += "- List folders and tree structures: `gdrive_list(folder_id)`\n"
+                elif name == "github":
+                    github_token_set = resolved_env.get("GITHUB_PERSONAL_ACCESS_TOKEN", "✗ NOT SET")
+                    base += f"\n**GitHub MCP is ACTIVE** (Token: {github_token_set})\n"
+                    base += "You can use the GitHub MCP to:\n"
+                    base += "- Inspect repository overview and stats: `github_get_repo(owner, repo)`\n"
+                    base += "- Search code across repositories: `github_search_code(query)`\n"
+                    base += "- List and review issues: `github_list_issues(owner, repo, state)`\n"
+                    base += "- Create pull requests with patches: `github_create_pr(owner, repo, title, head, base)`\n"
+                    base += "- Inspect commits and diffs: `github_get_commit(owner, repo, commit_sha)`\n"
                 elif name == "hive_tools":
                     base += "\n**Hive Tools MCP is ACTIVE**\n"
                     base += "You can use: web_search, web_scrape, send_email, and data tools.\n"
@@ -444,10 +544,19 @@ def _build_system_prompt() -> str:
                     base += "- `create_directory(path)` — Create a new directory and its parents\n"
                     base += "- `delete_file(path, recursive)` — Delete a file or directory tree (blocks critical paths)\n"
                     base += "- `move_file(source, destination)` — Move or rename a file or directory\n"
+                    base += "- `copy_file(source, destination)` — Copy a file or directory using Robocopy on Windows or rsync on Linux/macOS\n"
                     base += "- `list_directory_tree(path, max_depth)` — Get a hierarchical tree view of a directory\n"
                     base += "- `get_file_metadata(path)` — Get file size, permissions, and timestamps\n"
                     base += "\nUse the Filesystem Agent to read project files, generate code, apply edits, "
                     base += "organize directories, and inspect file structures without leaving the agent run.\n"
+                elif name == "terminal":
+                    base += "\n**Terminal is ACTIVE**\n"
+                    base += "You can run local shell commands in the workspace when filesystem tools are not enough.\n"
+                    base += "- `terminal(command, cwd, timeout)` — Run a command and return exit code, stdout, and stderr\n"
+                    base += "- Commands run from the workspace root by default; `cwd` may be a workspace-relative directory\n"
+                    base += "- Use terminal for repository search, builds, tests, scripts, archive operations, and file moves/deletes\n"
+                    base += "- Keep commands focused and do not claim success until the real result is returned\n"
+                    base += "Structured OS tools are also available: system_info, disk_usage, list_processes, process_status, stop_process, restart_process, list_services, service_status, start_service, stop_service, restart_service, package_manager, install_package, get_environment, set_environment, remove_environment, create_archive, extract_archive, get_permissions, set_permissions, list_scheduled_tasks, create_scheduled_task, delete_scheduled_task, run_scheduled_task, ping_host, and dns_lookup.\n"
                 elif name == "sqlite":
                     sqlite_db = resolved_env.get("SQLITE_DB_PATH", "✗ NOT SET")
                     base += f"\n**SQLite MCP is ACTIVE** (Database: {sqlite_db})\n"
@@ -511,11 +620,15 @@ def _normalise_chat_history(chat_history: list[ChatContextMessage]) -> list[dict
 async def _call_groq(
     model: str, 
     objective: str, 
-    chat_history: list[ChatContextMessage] | list[dict[str, str]]
+    chat_history: list[ChatContextMessage] | list[dict[str, str]],
+    api_key: Optional[str] = None
 ) -> str:
     """Call Groq API with stop sequences to enforce ReAct pattern."""
     from groq import AsyncGroq
-    client = AsyncGroq(api_key=os.environ.get("GROQ_API_KEY"))
+    key = api_key or os.environ.get("GROQ_API_KEY")
+    if not key:
+        raise ValueError("GROQ_API_KEY is not configured. Please provide your Groq API key (BYOK).")
+    client = AsyncGroq(api_key=key)
     
     # Handle both ChatContextMessage objects and raw dicts
     if chat_history and isinstance(chat_history[0], dict):
@@ -544,11 +657,15 @@ async def _call_groq(
 async def _call_openai(
     model: str, 
     objective: str, 
-    chat_history: list[ChatContextMessage] | list[dict[str, str]]
+    chat_history: list[ChatContextMessage] | list[dict[str, str]],
+    api_key: Optional[str] = None
 ) -> str:
     """Call OpenAI API with stop sequences to enforce ReAct pattern."""
     from openai import AsyncOpenAI
-    client = AsyncOpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+    key = api_key or os.environ.get("OPENAI_API_KEY")
+    if not key:
+        raise ValueError("OPENAI_API_KEY is not configured. Please provide your OpenAI API key (BYOK).")
+    client = AsyncOpenAI(api_key=key)
     
     # Handle both ChatContextMessage objects and raw dicts
     if chat_history and isinstance(chat_history[0], dict):
@@ -577,11 +694,15 @@ async def _call_openai(
 async def _call_anthropic(
     model: str, 
     objective: str, 
-    chat_history: list[ChatContextMessage] | list[dict[str, str]]
+    chat_history: list[ChatContextMessage] | list[dict[str, str]],
+    api_key: Optional[str] = None
 ) -> str:
     """Call Anthropic API with stop sequences to enforce ReAct pattern."""
     import anthropic
-    client = anthropic.AsyncAnthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+    key = api_key or os.environ.get("ANTHROPIC_API_KEY")
+    if not key:
+        raise ValueError("ANTHROPIC_API_KEY is not configured. Please provide your Anthropic API key (BYOK).")
+    client = anthropic.AsyncAnthropic(api_key=key)
     
     # Handle both ChatContextMessage objects and raw dicts
     if chat_history and isinstance(chat_history[0], dict):
@@ -609,11 +730,15 @@ async def _call_anthropic(
 async def _call_google(
     model: str, 
     objective: str, 
-    chat_history: list[ChatContextMessage] | list[dict[str, str]]
+    chat_history: list[ChatContextMessage] | list[dict[str, str]],
+    api_key: Optional[str] = None
 ) -> str:
     """Call Google Gemini API and return the response text."""
     from google import genai
-    client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
+    key = api_key or os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+    if not key:
+        raise ValueError("GEMINI_API_KEY is not configured. Please provide your Google Gemini API key (BYOK).")
+    client = genai.Client(api_key=key)
     
     # Handle both ChatContextMessage objects and raw dicts
     if chat_history and isinstance(chat_history[0], dict):
@@ -642,13 +767,15 @@ async def _call_google(
 async def _call_nvidia(
     model: str,
     objective: str,
-    chat_history: list[ChatContextMessage] | list[dict[str, str]]
+    chat_history: list[ChatContextMessage] | list[dict[str, str]],
+    api_key: Optional[str] = None
 ) -> str:
     """Call NVIDIA NIM API (OpenAI-compatible) for nvidia/nemotron-3.5-lightning-30b-a3b with thinking."""
     from openai import AsyncOpenAI
+    key = api_key or os.environ.get("NVIDIA_API_KEY", "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")
     client = AsyncOpenAI(
         base_url="https://integrate.api.nvidia.com/v1",
-        api_key=os.environ.get("NVIDIA_API_KEY", "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"),
+        api_key=key,
     )
 
     # Retired models -> remap to Lightning (nemotron-3-nano EOL 2026-09-01, gemma-4 too slow)
@@ -689,6 +816,87 @@ async def _call_nvidia(
             chunks.append(delta.content)
     result = "".join(chunks)
     return result if result.strip() else "(No response generated)"
+
+
+async def _call_openrouter(
+    model: str,
+    objective: str,
+    chat_history: list[ChatContextMessage] | list[dict[str, str]],
+    api_key: Optional[str] = None
+) -> str:
+    """Call OpenRouter unified API."""
+    from openai import AsyncOpenAI
+    key = api_key or os.environ.get("OPENROUTER_API_KEY")
+    if not key:
+        raise ValueError("OPENROUTER_API_KEY is not configured. Please provide your OpenRouter API key (BYOK).")
+    
+    clean_model = model.removeprefix("openrouter/") if model.startswith("openrouter/") else model
+
+    client = AsyncOpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key=key,
+        default_headers={
+            "HTTP-Referer": "https://prismspace.app",
+            "X-Title": "PrismSpace",
+        },
+    )
+
+    if chat_history and isinstance(chat_history[0], dict):
+        messages = chat_history
+    else:
+        messages = _normalise_chat_history(chat_history)
+
+    final_messages = [{"role": "system", "content": _build_system_prompt()}]
+    final_messages.extend(messages)
+
+    if objective:
+        final_messages.append({"role": "user", "content": objective})
+
+    response = await client.chat.completions.create(
+        model=clean_model,
+        messages=final_messages,
+        temperature=0.7,
+        max_tokens=4096,
+        stop=["```\n\n", "```\n", "\n\n\n"],
+    )
+    return response.choices[0].message.content or "(No response generated)"
+
+
+async def _call_deepseek(
+    model: str,
+    objective: str,
+    chat_history: list[ChatContextMessage] | list[dict[str, str]],
+    api_key: Optional[str] = None
+) -> str:
+    """Call DeepSeek native API."""
+    from openai import AsyncOpenAI
+    key = api_key or os.environ.get("DEEPSEEK_API_KEY")
+    if not key:
+        raise ValueError("DEEPSEEK_API_KEY is not configured. Please provide your DeepSeek API key (BYOK).")
+    client = AsyncOpenAI(
+        base_url="https://api.deepseek.com",
+        api_key=key,
+    )
+
+    if chat_history and isinstance(chat_history[0], dict):
+        messages = chat_history
+    else:
+        messages = _normalise_chat_history(chat_history)
+
+    final_messages = [{"role": "system", "content": _build_system_prompt()}]
+    final_messages.extend(messages)
+
+    if objective:
+        final_messages.append({"role": "user", "content": objective})
+
+    response = await client.chat.completions.create(
+        model=model,
+        messages=final_messages,
+        temperature=0.7,
+        max_tokens=4096,
+        stop=["```\n\n", "```\n", "\n\n\n"],
+    )
+    return response.choices[0].message.content or "(No response generated)"
 
 
 # ---------------------------------------------------------------------------
@@ -880,23 +1088,181 @@ def _exec_delete_file(args: dict) -> str:
         return f"Error deleting path '{raw_path}': {e}"
 
 
-def _exec_move_file(args: dict) -> str:
+def _transfer_log(agent_id: Optional[str], message: str) -> None:
+    if agent_id:
+        _log(agent_id, f"[TRANSFER] {message}")
+
+
+def _display_command(command: list[str]) -> str:
+    return subprocess.list2cmdline(command) if os.name == "nt" else shlex.join(command)
+
+
+def _run_transfer_command(
+    command: list[str],
+    operation: str,
+    agent_id: Optional[str],
+    timeout: int,
+) -> tuple[int, str]:
+    """Run a copy utility while forwarding progress lines into the agent log."""
+    _transfer_log(agent_id, f"{operation} command: {_display_command(command)}")
+    try:
+        process = subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            bufsize=1,
+        )
+    except OSError as exc:
+        return -1, str(exc)
+
+    if agent_id:
+        _active_operations[agent_id] = process
+
+    output: list[str] = []
+    started = time.monotonic()
+    last_progress = -1
+    try:
+        if process.stdout:
+            for raw_line in process.stdout:
+                line = raw_line.strip()
+                if not line:
+                    continue
+                output.append(line)
+                match = re.search(r"(?<!\d)(\d{1,3})%", line)
+                if match:
+                    progress = min(100, int(match.group(1)))
+                    if progress != last_progress:
+                        _transfer_log(agent_id, f"{operation} progress {progress}%")
+                        last_progress = progress
+                elif len(output) <= 4:
+                    _transfer_log(agent_id, f"{operation}: {line[:240]}")
+
+                if time.monotonic() - started > timeout:
+                    process.kill()
+                    process.wait()
+                    return -2, "transfer timed out"
+        exit_code = process.wait()
+        was_cancelled = bool(agent_id and agent_id in _cancelled_operations)
+        if agent_id:
+            _active_operations.pop(agent_id, None)
+            _cancelled_operations.discard(agent_id)
+        return (-3 if was_cancelled else exit_code), "\n".join(output[-20:])
+    finally:
+        if agent_id:
+            _active_operations.pop(agent_id, None)
+        if process.poll() is None:
+            process.kill()
+            process.wait()
+
+
+def _exec_transfer(args: dict, operation: str, agent_id: Optional[str] = None) -> str:
     raw_src = args.get("source", "")
     raw_dst = args.get("destination", "")
-    
-    # Use smart path resolution
-    p_src = _resolve_path(raw_src)
-    p_dst = _resolve_path(raw_dst)
-        
+    if not isinstance(raw_src, str) or not raw_src.strip() or not isinstance(raw_dst, str) or not raw_dst.strip():
+        return f"Error: {operation} requires both source and destination paths."
+    p_src = _resolve_path(raw_src, prefer_backend=False).resolve()
+    p_dst = _resolve_path(raw_dst, prefer_backend=False).resolve()
+
     if not p_src.exists():
         return f"Error: Source not found: {raw_src} (resolved to: {p_src})"
-        
+
+    workspace = pathlib.Path(WORKSPACE_ROOT).resolve()
+    for candidate in (p_src, p_dst):
+        try:
+            candidate.relative_to(workspace)
+        except ValueError:
+            return f"Error: transfer paths must stay inside the workspace: {candidate}"
+
+    if p_dst.exists() and p_dst.is_dir():
+        p_dst = p_dst / p_src.name
+    p_dst.parent.mkdir(parents=True, exist_ok=True)
+    kind = "directory" if p_src.is_dir() else "file"
+    _transfer_log(agent_id, f"{operation} started: {raw_src} -> {raw_dst} ({kind})")
+
     try:
-        p_dst.parent.mkdir(parents=True, exist_ok=True)
-        shutil.move(str(p_src), str(p_dst))
-        return f"Successfully moved '{raw_src}' to '{raw_dst}' (from {p_src} to {p_dst})"
-    except Exception as e:
-        return f"Error moving file from '{raw_src}' to '{raw_dst}': {e}"
+        timeout = max(30, min(int(args.get("timeout", 1800)), 3600))
+    except (TypeError, ValueError):
+        timeout = 1800
+    is_move = operation == "move"
+    command_name = ""
+    exit_code = -1
+    output = ""
+
+    if os.name == "nt" and shutil.which("robocopy"):
+        command_name = "robocopy"
+        if p_src.is_dir():
+            command = ["robocopy", str(p_src), str(p_dst), "/E", "/J", "/R:1", "/W:1", "/ETA"]
+            if is_move:
+                command.insert(3, "/MOVE")
+        else:
+            command = ["robocopy", str(p_src.parent), str(p_dst.parent), p_src.name, "/J", "/R:1", "/W:1", "/ETA"]
+            if is_move:
+                command.insert(4, "/MOV")
+        exit_code, output = _run_transfer_command(command, operation, agent_id, timeout)
+        success = 0 <= exit_code <= 7
+        if success and p_src.is_file() and p_src.name != p_dst.name:
+            copied = p_dst.parent / p_src.name
+            if copied.exists():
+                if is_move:
+                    copied.replace(p_dst)
+                else:
+                    shutil.copy2(copied, p_dst)
+    elif os.name != "nt" and shutil.which("rsync"):
+        command_name = "rsync"
+        if p_src.is_dir():
+            command = ["rsync", "-a", "--info=progress2", f"{p_src}{os.sep}", f"{p_dst}{os.sep}"]
+            exit_code, output = _run_transfer_command(command, operation, agent_id, timeout)
+            success = exit_code == 0
+            if success and is_move:
+                shutil.rmtree(p_src)
+        else:
+            command = ["rsync", "-a", "--info=progress2", str(p_src), str(p_dst)]
+            if is_move:
+                command.insert(3, "--remove-source-files")
+            exit_code, output = _run_transfer_command(command, operation, agent_id, timeout)
+            success = exit_code == 0
+    else:
+        command_name = "cp"
+        _transfer_log(agent_id, f"{operation} fallback command: {_display_command(['cp', '-a', str(p_src), str(p_dst)])}")
+        try:
+            if p_src.is_dir():
+                shutil.copytree(p_src, p_dst, dirs_exist_ok=True)
+                if is_move:
+                    shutil.rmtree(p_src)
+            else:
+                shutil.copy2(p_src, p_dst)
+                if is_move:
+                    p_src.unlink()
+            exit_code = 0
+            success = True
+            _transfer_log(agent_id, f"{operation} progress 100%")
+        except OSError as exc:
+            output = str(exc)
+            success = False
+
+    if exit_code == -3:
+        _transfer_log(agent_id, f"{operation} cancelled by operator")
+        return f"The {operation} operation was cancelled by the operator."
+
+    if not success:
+        _transfer_log(agent_id, f"{operation} failed via {command_name} (exit {exit_code})")
+        return f"Error: {operation} failed via {command_name} (exit code {exit_code}).\n{output}"
+
+    _transfer_log(agent_id, f"{operation} progress 100%")
+    _transfer_log(agent_id, f"{operation} complete via {command_name}: {p_dst}")
+    verb = "copied" if operation == "copy" else "moved"
+    return f"Successfully {verb} '{raw_src}' to '{raw_dst}' via {command_name} (exit code {exit_code})."
+
+
+def _exec_copy_file(args: dict, agent_id: Optional[str] = None) -> str:
+    return _exec_transfer(args, "copy", agent_id)
+
+
+def _exec_move_file(args: dict, agent_id: Optional[str] = None) -> str:
+    return _exec_transfer(args, "move", agent_id)
 
 
 def _exec_list_directory_tree(args: dict) -> str:
@@ -957,6 +1323,78 @@ def _exec_get_file_metadata(args: dict) -> str:
         )
     except Exception as e:
         return f"Error reading metadata: {e}"
+
+
+def _exec_terminal(args: dict) -> str:
+    """Run a shell command from the workspace with bounded runtime and output."""
+    command = args.get("command", "")
+    if not isinstance(command, str) or not command.strip():
+        return "Error: terminal requires a non-empty command."
+
+    raw_cwd = args.get("cwd", "")
+    cwd = _resolve_path(raw_cwd, prefer_backend=False) if raw_cwd else pathlib.Path(WORKSPACE_ROOT)
+    try:
+        cwd = cwd.resolve()
+    except OSError as exc:
+        return f"Error resolving terminal cwd '{raw_cwd}': {exc}"
+
+    workspace = pathlib.Path(WORKSPACE_ROOT).resolve()
+    try:
+        cwd.relative_to(workspace)
+    except ValueError:
+        return f"Error: terminal cwd must stay inside the workspace: {cwd}"
+    if not cwd.is_dir():
+        return f"Error: terminal cwd is not a directory: {cwd}"
+
+    try:
+        timeout = max(1, min(int(args.get("timeout", 30)), 120))
+    except (TypeError, ValueError):
+        timeout = 30
+
+    # Match the host's normal shell on Windows so agents can use commands such
+    # as Get-ChildItem, Select-String, and Move-Item consistently.
+    if os.name == "nt":
+        shell_command: str | list[str] = [
+            os.environ.get("HIVE_TERMINAL_SHELL", "powershell.exe"),
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            command,
+        ]
+        use_shell = False
+    else:
+        shell_command = command
+        use_shell = True
+
+    try:
+        completed = subprocess.run(
+            shell_command,
+            cwd=str(cwd),
+            shell=use_shell,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        stdout = (exc.stdout or "")[-20_000:]
+        stderr = (exc.stderr or "")[-20_000:]
+        return (
+            f"Terminal command timed out after {timeout}s (cwd: {cwd}).\n"
+            f"stdout:\n{stdout}\n\nstderr:\n{stderr}"
+        )
+    except OSError as exc:
+        return f"Error starting terminal command in '{cwd}': {exc}"
+
+    stdout = (completed.stdout or "")[-20_000:]
+    stderr = (completed.stderr or "")[-20_000:]
+    return (
+        f"Terminal result (exit code {completed.returncode}, cwd: {cwd}):\n"
+        f"stdout:\n{stdout or '(empty)'}\n\nstderr:\n{stderr or '(empty)'}"
+    )
 
 
 def _exec_sqlite(args: dict, operation: str) -> str:
@@ -1092,7 +1530,175 @@ def _exec_gmail(tool: str, args: dict, user_id: Optional[str] = None) -> str:
         return f"Gmail request failed: {exc}"
 
 
-def _dispatch_tool(tool_call: dict, user_id: Optional[str] = None) -> str:
+def _exec_figma(tool: str, args: dict) -> str:
+    """Execute Figma MCP tools via Figma REST API if FIGMA_API_TOKEN is present."""
+    import httpx as _httpx
+    tools_env = _load_tools_env()
+    token = (
+        tools_env.get("FIGMA_API_TOKEN")
+        or os.environ.get("FIGMA_API_TOKEN")
+        or tools_env.get("FIGMA_PERSONAL_ACCESS_TOKEN")
+        or os.environ.get("FIGMA_PERSONAL_ACCESS_TOKEN")
+    )
+    if not token:
+        return (
+            "Figma API token not configured. Please save FIGMA_API_TOKEN in the "
+            "Swarm Settings > MCP Tokens panel."
+        )
+
+    raw_file_key = str(args.get("file_key") or args.get("key") or args.get("url") or "").strip()
+    if "figma.com/file/" in raw_file_key or "figma.com/design/" in raw_file_key:
+        match = re.search(r"figma\.com/(?:file|design)/([a-zA-Z0-9]+)", raw_file_key)
+        file_key = match.group(1) if match else raw_file_key
+    else:
+        file_key = raw_file_key
+
+    if not file_key:
+        return "Error: 'file_key' or Figma URL is required for Figma MCP operations."
+
+    headers = {"X-Figma-Token": token}
+    try:
+        if tool in ("figma_get_file", "get_file"):
+            depth = args.get("depth", 2)
+            r = _httpx.get(
+                f"https://api.figma.com/v1/files/{file_key}",
+                headers=headers,
+                params={"depth": depth},
+                timeout=25.0,
+            )
+            if r.status_code == 200:
+                data = r.json()
+                name = data.get("name", "Untitled")
+                doc = data.get("document", {})
+                pages = [child.get("name", "") for child in doc.get("children", [])]
+                return (
+                    f"Figma File: '{name}' (Key: {file_key})\n"
+                    f"Pages: {', '.join(pages) if pages else 'None'}\n"
+                    f"Structure:\n{json.dumps(data, indent=2)[:4000]}"
+                )
+            return f"Figma API returned {r.status_code}: {r.text[:400]}"
+        elif tool in ("figma_get_file_nodes", "get_file_nodes"):
+            ids = args.get("ids", [])
+            ids_str = ",".join(ids) if isinstance(ids, list) else str(ids)
+            r = _httpx.get(
+                f"https://api.figma.com/v1/files/{file_key}/nodes",
+                headers=headers,
+                params={"ids": ids_str},
+                timeout=25.0,
+            )
+            return r.text[:5000] if r.status_code == 200 else f"Figma API error ({r.status_code}): {r.text[:300]}"
+        elif tool in ("figma_get_comments", "get_comments"):
+            r = _httpx.get(
+                f"https://api.figma.com/v1/files/{file_key}/comments",
+                headers=headers,
+                timeout=25.0,
+            )
+            return r.text[:5000] if r.status_code == 200 else f"Figma API error ({r.status_code}): {r.text[:300]}"
+        return f"Figma operation '{tool}' executed with key '{file_key}'."
+    except Exception as exc:
+        return f"Figma request failed: {exc}"
+
+
+def _exec_github(tool: str, args: dict) -> str:
+    """Execute GitHub MCP tools via GitHub REST API if GITHUB_PERSONAL_ACCESS_TOKEN is present."""
+    import httpx as _httpx
+    tools_env = _load_tools_env()
+    token = (
+        tools_env.get("GITHUB_PERSONAL_ACCESS_TOKEN")
+        or os.environ.get("GITHUB_PERSONAL_ACCESS_TOKEN")
+        or tools_env.get("GITHUB_TOKEN")
+        or os.environ.get("GITHUB_TOKEN")
+    )
+    headers = {"Accept": "application/vnd.github.v3+json", "User-Agent": "PrismSpace-AgentSwarm"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    try:
+        if tool in ("github_get_repo", "get_repo"):
+            owner = str(args.get("owner", "")).strip()
+            repo = str(args.get("repo", "")).strip()
+            if not owner or not repo:
+                return "Error: 'owner' and 'repo' are required."
+            r = _httpx.get(f"https://api.github.com/repos/{owner}/{repo}", headers=headers, timeout=20.0)
+            if r.status_code == 200:
+                data = r.json()
+                return json.dumps({
+                    "full_name": data.get("full_name"),
+                    "description": data.get("description"),
+                    "stars": data.get("stargazers_count"),
+                    "forks": data.get("forks_count"),
+                    "default_branch": data.get("default_branch"),
+                    "open_issues": data.get("open_issues_count"),
+                }, indent=2)
+            return f"GitHub API error ({r.status_code}): {r.text[:300]}"
+        elif tool in ("github_search_code", "search_code"):
+            query = str(args.get("query", "")).strip()
+            if not query:
+                return "Error: 'query' parameter is required."
+            r = _httpx.get(
+                "https://api.github.com/search/code",
+                headers=headers,
+                params={"q": query, "per_page": 5},
+                timeout=20.0,
+            )
+            return r.text[:4000] if r.status_code == 200 else f"GitHub Search error ({r.status_code}): {r.text[:300]}"
+        elif tool in ("github_list_issues", "list_issues"):
+            owner = str(args.get("owner", "")).strip()
+            repo = str(args.get("repo", "")).strip()
+            state = args.get("state", "open")
+            if not owner or not repo:
+                return "Error: 'owner' and 'repo' are required."
+            r = _httpx.get(
+                f"https://api.github.com/repos/{owner}/{repo}/issues",
+                headers=headers,
+                params={"state": state, "per_page": 10},
+                timeout=20.0,
+            )
+            return r.text[:5000] if r.status_code == 200 else f"GitHub Issues error ({r.status_code}): {r.text[:300]}"
+        return f"GitHub tool '{tool}' executed."
+    except Exception as exc:
+        return f"GitHub request failed: {exc}"
+
+
+def _exec_google_drive(tool: str, args: dict) -> str:
+    """Execute Google Drive MCP operations."""
+    import httpx as _httpx
+    tools_env = _load_tools_env()
+    token = (
+        tools_env.get("GOOGLE_DRIVE_CREDENTIALS")
+        or os.environ.get("GOOGLE_DRIVE_CREDENTIALS")
+        or tools_env.get("GDRIVE_API_KEY")
+        or os.environ.get("GDRIVE_API_KEY")
+        or os.environ.get("GOOGLE_ACCESS_TOKEN")
+    )
+    if not token:
+        return (
+            "Google Drive credentials not configured. Please save GOOGLE_DRIVE_CREDENTIALS or "
+            "GDRIVE_API_KEY in Swarm Settings > MCP Tokens panel."
+        )
+
+    query = args.get("query", "")
+    try:
+        headers = {"Authorization": f"Bearer {token}"} if not str(token).startswith("AIza") else {}
+        params = {"q": query or "trashed = false", "pageSize": 10, "fields": "files(id, name, mimeType, webViewLink)"}
+        if str(token).startswith("AIza"):
+            params["key"] = token
+        r = _httpx.get(
+            "https://www.googleapis.com/drive/v3/files",
+            headers=headers,
+            params=params,
+            timeout=20.0,
+        )
+        return r.text[:5000] if r.status_code == 200 else f"Google Drive API error ({r.status_code}): {r.text[:300]}"
+    except Exception as exc:
+        return f"Google Drive request failed: {exc}"
+
+
+def _dispatch_tool(
+    tool_call: dict,
+    user_id: Optional[str] = None,
+    agent_id: Optional[str] = None,
+) -> str:
     """Dispatch a parsed tool call to the correct executor."""
     tool = tool_call.get("tool", "").lower()
     args = tool_call.get("arguments", {})
@@ -1105,18 +1711,32 @@ def _dispatch_tool(tool_call: dict, user_id: Optional[str] = None) -> str:
     if tool == "write_file":
         return _exec_write_file(args)
     if tool == "edit_file":
-        # Basic: treat as read + write
         return "edit_file: use read_file then write_file for now — direct patch execution coming soon."
     if tool == "create_directory":
         return _exec_create_directory(args)
     if tool == "delete_file":
         return _exec_delete_file(args)
     if tool == "move_file":
-        return _exec_move_file(args)
+        return _exec_move_file(args, agent_id)
+    if tool == "copy_file":
+        return _exec_copy_file(args, agent_id)
     if tool == "list_directory_tree":
         return _exec_list_directory_tree(args)
     if tool == "get_file_metadata":
         return _exec_get_file_metadata(args)
+    if tool == "terminal":
+        return _exec_terminal(args)
+
+    # Structured operating-system tools
+    if tool in {
+        "system_info", "disk_usage", "list_processes", "process_status", "stop_process", "restart_process",
+        "list_services", "service_status", "start_service", "stop_service", "restart_service",
+        "package_manager", "install_package", "get_environment", "set_environment", "remove_environment",
+        "create_archive", "extract_archive", "get_permissions", "set_permissions",
+        "list_scheduled_tasks", "create_scheduled_task", "delete_scheduled_task", "run_scheduled_task",
+        "ping_host", "dns_lookup",
+    }:
+        return execute_os_tool(tool, args)
 
     # SQLite tools
     if tool in ("read_query", "write_query", "create_table", "list_tables", "describe_table"):
@@ -1130,10 +1750,69 @@ def _dispatch_tool(tool_call: dict, user_id: Optional[str] = None) -> str:
     if tool.startswith("gmail_") or tool == "send_email":
         return _exec_gmail(tool, args, user_id)
 
+    # Figma tools
+    if tool.startswith("figma_") or tool in ("get_file", "get_file_nodes", "get_comments", "get_image"):
+        return _exec_figma(tool, args)
+
+    # GitHub tools
+    if tool.startswith("github_") or tool in ("get_repo", "search_code", "list_issues", "create_pr", "get_commit"):
+        return _exec_github(tool, args)
+
+    # Google Drive tools
+    if tool.startswith("gdrive_") or tool.startswith("google_drive_") or tool in ("read_doc", "create_drive_file"):
+        return _exec_google_drive(tool, args)
+
     return (
         f"Tool '{tool}' was recognised but has no local executor. "
         "It will be handled by the MCP server process when integrated."
     )
+
+
+def _tool_requires_approval(tool: str, args: dict) -> bool:
+    if tool in DESTRUCTIVE_OS_TOOLS or tool in {"delete_file", "move_file", "write_file", "edit_file", "create_directory", "copy_file"}:
+        return True
+    if tool != "terminal":
+        return False
+    command = str(args.get("command", "")).lower()
+    return bool(re.search(r"\b(remove-item|del|erase|rm|rmdir|move-item|mv|kill|taskkill|setx|chmod|chown|install|schtasks|systemctl\s+(start|stop|restart)|sudo)\b", command))
+
+
+async def _await_tool_approval(agent_id: str, tool: str, args: dict) -> bool:
+    if not _tool_requires_approval(tool, args):
+        return True
+
+    agent = _agents[agent_id]
+    approval_id = uuid.uuid4().hex[:12]
+    pending = {
+        "id": approval_id,
+        "tool": tool,
+        "arguments": args,
+        "reason": f"The `{tool}` operation can change system or workspace state.",
+    }
+    agent["pending_approval"] = pending
+    agent["status"] = "awaiting_approval"
+    agent["updated_at"] = datetime.utcnow().isoformat()
+    _tool_approval_decisions.pop(agent_id, None)
+    event = asyncio.Event()
+    _tool_approval_events[agent_id] = event
+    _log(agent_id, f"[APPROVAL] Waiting for operator approval before `{tool}` ({approval_id})")
+
+    try:
+        await asyncio.wait_for(event.wait(), timeout=300)
+    except asyncio.TimeoutError:
+        _log(agent_id, f"[APPROVAL] Timed out for `{tool}` ({approval_id})")
+        approved = False
+    else:
+        approved = _tool_approval_decisions.pop(agent_id, False)
+    finally:
+        _tool_approval_events.pop(agent_id, None)
+        agent["pending_approval"] = None
+        if agent.get("status") == "awaiting_approval":
+            agent["status"] = "running"
+            agent["updated_at"] = datetime.utcnow().isoformat()
+
+    _log(agent_id, f"[APPROVAL] {'Approved' if approved else 'Rejected'} `{tool}` ({approval_id})")
+    return approved
 
 
 async def _tool_use_loop(
@@ -1215,8 +1894,19 @@ async def _tool_use_loop(
                     "- create_directory: Create a new directory\n"
                     "- delete_file: Delete a file or directory\n"
                     "- move_file: Move or rename a file\n"
+                    "- copy_file: Copy a file or directory using the fastest available native copier\n"
                     "- list_directory_tree: Get directory structure\n"
                     "- get_file_metadata: Get file information\n"
+                    "- terminal: Run a shell command in the workspace (command, cwd, timeout)\n"
+                    "- system_info/disk_usage: Inspect host and workspace resources\n"
+                    "- list_processes/process_status/stop_process/restart_process: Inspect or control processes\n"
+                    "- list_services/service_status/start_service/stop_service/restart_service: Inspect or control services\n"
+                    "- package_manager/install_package: Detect or install packages\n"
+                    "- get_environment/set_environment/remove_environment: Inspect or change environment values\n"
+                    "- create_archive/extract_archive: Create or extract ZIP/TAR archives\n"
+                    "- get_permissions/set_permissions: Inspect or change file permissions\n"
+                    "- list_scheduled_tasks/create_scheduled_task/delete_scheduled_task/run_scheduled_task: Manage scheduled tasks\n"
+                    "- ping_host/dns_lookup: Run network diagnostics\n"
                     "- set_memory: Store a value in memory\n"
                     "- get_memory: Retrieve a value from memory\n"
                     "- read_query: Execute SQL SELECT query\n"
@@ -1240,15 +1930,19 @@ async def _tool_use_loop(
                 
                 try:
                     if provider == "groq":
-                        current_response = await _call_groq(request.model, "", conversation_history)
+                        current_response = await _call_groq(request.model, "", conversation_history, api_key=request.api_key)
                     elif provider == "nvidia":
-                        current_response = await _call_nvidia(request.model, "", conversation_history)
+                        current_response = await _call_nvidia(request.model, "", conversation_history, api_key=request.api_key)
                     elif provider == "openai":
-                        current_response = await _call_openai(request.model, "", conversation_history)
+                        current_response = await _call_openai(request.model, "", conversation_history, api_key=request.api_key)
                     elif provider == "anthropic":
-                        current_response = await _call_anthropic(request.model, "", conversation_history)
-                    elif provider == "google":
-                        current_response = await _call_google(request.model, "", conversation_history)
+                        current_response = await _call_anthropic(request.model, "", conversation_history, api_key=request.api_key)
+                    elif provider in ("google", "gemini"):
+                        current_response = await _call_google(request.model, "", conversation_history, api_key=request.api_key)
+                    elif provider == "openrouter":
+                        current_response = await _call_openrouter(request.model, "", conversation_history, api_key=request.api_key)
+                    elif provider == "deepseek":
+                        current_response = await _call_deepseek(request.model, "", conversation_history, api_key=request.api_key)
                     else:
                         _log(agent_id, f"⚠️ Unknown provider: {provider}, giving up")
                         return current_response
@@ -1299,8 +1993,17 @@ async def _tool_use_loop(
             tool_args = tc.get("arguments", {})
             
             _log(agent_id, f"   [{idx}/{len(tool_calls)}] Executing `{tool_name}` with args: {json.dumps(tool_args, ensure_ascii=False)[:100]}...")
-            
-            result = _dispatch_tool(tc, getattr(request, "user_id", None))
+
+            approved = await _await_tool_approval(agent_id, tool_name, tool_args)
+            if not approved:
+                result = f"Operation `{tool_name}` was rejected or timed out by the operator."
+            else:
+                result = await asyncio.to_thread(
+                    _dispatch_tool,
+                    tc,
+                    getattr(request, "user_id", None),
+                    agent_id,
+                )
             preview = result[:150].replace("\n", " ")
             _log(agent_id, f"   ✓ `{tool_name}` returned {len(result)} chars: {preview}...")
             
@@ -1336,15 +2039,19 @@ async def _tool_use_loop(
         
         try:
             if provider == "groq":
-                current_response = await _call_groq(request.model, "", conversation_history)
+                current_response = await _call_groq(request.model, "", conversation_history, api_key=request.api_key)
             elif provider == "nvidia":
-                current_response = await _call_nvidia(request.model, "", conversation_history)
+                current_response = await _call_nvidia(request.model, "", conversation_history, api_key=request.api_key)
             elif provider == "openai":
-                current_response = await _call_openai(request.model, "", conversation_history)
+                current_response = await _call_openai(request.model, "", conversation_history, api_key=request.api_key)
             elif provider == "anthropic":
-                current_response = await _call_anthropic(request.model, "", conversation_history)
-            elif provider == "google":
-                current_response = await _call_google(request.model, "", conversation_history)
+                current_response = await _call_anthropic(request.model, "", conversation_history, api_key=request.api_key)
+            elif provider in ("google", "gemini"):
+                current_response = await _call_google(request.model, "", conversation_history, api_key=request.api_key)
+            elif provider == "openrouter":
+                current_response = await _call_openrouter(request.model, "", conversation_history, api_key=request.api_key)
+            elif provider == "deepseek":
+                current_response = await _call_deepseek(request.model, "", conversation_history, api_key=request.api_key)
             else:
                 _log(agent_id, f"⚠️ Unknown provider: {provider}, breaking loop")
                 return current_response
@@ -1389,8 +2096,9 @@ async def _run_hive_agent(agent_id: str, request: CreateAgentRequest) -> None:
         _log(agent_id, f"Spawning {request.max_agents} specialised sub-agents")
         sub_agents = [f"Agent-{chr(65+i)}" for i in range(request.max_agents)]
         agent["selected_agents"] = sub_agents
-        for sa in sub_agents:
-            _log(agent_id, f"   -> {sa} ready")
+        for i, sa in enumerate(sub_agents):
+            assignment = request.worker_models[i] if i < len(request.worker_models) else {"provider": request.provider, "model": request.model}
+            _log(agent_id, f"   -> {sa} ready ({assignment.get('provider', request.provider)}/{assignment.get('model', request.model)})")
             await asyncio.sleep(0.15)
 
         # --- Running phase ---
@@ -1425,15 +2133,19 @@ async def _run_hive_agent(agent_id: str, request: CreateAgentRequest) -> None:
 
         provider = request.provider.lower()
         if provider == "groq":
-            result_text = await _call_groq(request.model, request.objective, request.chat_history)
+            result_text = await _call_groq(request.model, request.objective, request.chat_history, api_key=request.api_key)
         elif provider == "nvidia":
-            result_text = await _call_nvidia(request.model, request.objective, request.chat_history)
+            result_text = await _call_nvidia(request.model, request.objective, request.chat_history, api_key=request.api_key)
         elif provider == "openai":
-            result_text = await _call_openai(request.model, request.objective, request.chat_history)
+            result_text = await _call_openai(request.model, request.objective, request.chat_history, api_key=request.api_key)
         elif provider == "anthropic":
-            result_text = await _call_anthropic(request.model, request.objective, request.chat_history)
-        elif provider == "google":
-            result_text = await _call_google(request.model, request.objective, request.chat_history)
+            result_text = await _call_anthropic(request.model, request.objective, request.chat_history, api_key=request.api_key)
+        elif provider in ("google", "gemini"):
+            result_text = await _call_google(request.model, request.objective, request.chat_history, api_key=request.api_key)
+        elif provider == "openrouter":
+            result_text = await _call_openrouter(request.model, request.objective, request.chat_history, api_key=request.api_key)
+        elif provider == "deepseek":
+            result_text = await _call_deepseek(request.model, request.objective, request.chat_history, api_key=request.api_key)
         else:
             raise ValueError(f"Unsupported provider: {request.provider}")
 
@@ -1635,12 +2347,17 @@ async def create_agent(
         except Exception as exc:
             intelligence = {"error": str(exc)}
 
+    # Explicit openrouter model prefix routes to openrouter
+    if request.model.startswith("openrouter/"):
+        request.provider = "openrouter"
+
     agent = {
         "id": agent_id,
         "objective": request.objective,
         "model": request.model,
         "provider": request.provider,
         "max_agents": request.max_agents,
+        "worker_models": request.worker_models,
         "human_in_loop": request.human_in_loop,
         "user_id": request.user_id,
         "status": "initialising",
@@ -1648,6 +2365,7 @@ async def create_agent(
         "updated_at": now,
         "result": None,
         "approved": None,
+        "pending_approval": None,
         "intelligence": intelligence,
     }
 
@@ -1682,6 +2400,16 @@ async def approve_agent(agent_id: str, body: ApproveAgentRequest):
     agent = _agents.get(agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
+
+    pending_tool = agent.get("pending_approval")
+    if pending_tool:
+        event = _tool_approval_events.get(agent_id)
+        if event is None:
+            raise HTTPException(status_code=409, detail="Tool approval is no longer active")
+        _tool_approval_decisions[agent_id] = body.approved
+        _log(agent_id, f"👤 Operator {'approved' if body.approved else 'rejected'} `{pending_tool.get('tool')}`" + (f": {body.message}" if body.message else ""))
+        event.set()
+        return {"ok": True, "action": "approved" if body.approved else "rejected", "tool": pending_tool.get("tool")}
         
     # If already approved/rejected, ignore duplicate clicks from UI
     if agent.get("approved") is not None:
@@ -1744,6 +2472,23 @@ async def stream_logs(agent_id: str, since: int = 0):
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@app.post("/api/agents/{agent_id}/cancel-operation")
+async def cancel_operation(agent_id: str):
+    """Cancel the active native transfer for an agent, if one is running."""
+    if agent_id not in _agents:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    process = _active_operations.get(agent_id)
+    if process is None or process.poll() is not None:
+        return {"ok": False, "cancelled": False, "detail": "No cancellable operation is running"}
+    _cancelled_operations.add(agent_id)
+    try:
+        process.kill()
+    except OSError:
+        pass
+    _log(agent_id, "[TRANSFER] Cancellation requested by operator")
+    return {"ok": True, "cancelled": True}
 
 
 @app.get("/api/intelligence")

@@ -1,3 +1,7 @@
+/**
+ * Copyright 2026 Nobin Sijo (NobinSijo7T).
+ * SPDX-License-Identifier: Apache-2.0
+ */
 export function errorToString(error) {
     if (error instanceof Error && error.message) {
         return error.message;

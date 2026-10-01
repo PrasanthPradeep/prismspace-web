@@ -1,3 +1,5 @@
+# Copyright 2026 Nobin Sijo (NobinSijo7T).
+# SPDX-License-Identifier: Apache-2.0
 """Fine-tune a local causal language model on curated preference pairs with ORPO.
 
 The result is a PEFT/LoRA adapter, not a replacement for the tabular models.
@@ -34,9 +36,9 @@ def _load_pairs(path: Path, cache_dir: Path, max_samples: int = 0):
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model-path", default="model/datasets/Qwen2.5-1.5B")
-    parser.add_argument("--train-file", default="model/datasets/curated/reward/train.jsonl")
-    parser.add_argument("--eval-file", default="model/datasets/curated/reward/test.jsonl")
+    parser.add_argument("--model-path", default="model/datasets/training/Qwen2.5-1.5B")
+    parser.add_argument("--train-file", default="model/datasets/training/curated/reward/train.jsonl")
+    parser.add_argument("--eval-file", default="model/datasets/testing/curated/reward/test.jsonl")
     parser.add_argument("--output-dir", default="model/artifacts/reward_orpo")
     parser.add_argument("--cache-dir", default="model/artifacts/huggingface_cache")
     parser.add_argument("--max-length", type=int, default=256,

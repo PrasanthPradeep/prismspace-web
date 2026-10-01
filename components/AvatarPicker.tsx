@@ -1,11 +1,27 @@
+/**
+ * Copyright 2026 Nobin Sijo (NobinSijo7T).
+ * SPDX-License-Identifier: Apache-2.0
+ */
 'use client';
 
 import { useState, useRef } from 'react';
+import Image from 'next/image';
+import { ModernUserIcon, ModernIconVariant } from './ui/ModernUserIcon';
 
 interface AvatarPickerProps {
   currentAvatar: string;
   onAvatarChange: (avatar: string) => void;
 }
+
+export const MODERN_AVATARS: { id: string; name: string; variant: ModernIconVariant; tag: string }[] = [
+  { id: 'modern:zenith', name: 'Zenith Minimal', variant: 'zenith', tag: 'Pure Sleek' },
+  { id: 'modern:mono', name: 'Mono Contour', variant: 'mono', tag: 'Minimal Line' },
+  { id: 'modern:minimal', name: 'Minimal Luxe', variant: 'minimal', tag: 'Platinum' },
+  { id: 'modern:cyber', name: 'Cyber Operator', variant: 'cyber', tag: 'Neon Visor' },
+  { id: 'modern:prism', name: 'Prism Hologram', variant: 'prism', tag: 'Refraction' },
+  { id: 'modern:matrix', name: 'Neural Matrix', variant: 'matrix', tag: 'Digital Wire' },
+  { id: 'modern:phantom', name: 'Stealth Obsidian', variant: 'phantom', tag: 'Cyan Glow' },
+];
 
 const EMOJI_AVATARS = [
   '😀', '😎', '🤓', '😜', '🤩', '😇', '🥳', '🤗',
@@ -16,7 +32,12 @@ const EMOJI_AVATARS = [
 
 export function AvatarPicker({ currentAvatar, onAvatarChange }: AvatarPickerProps) {
   const [showPicker, setShowPicker] = useState(false);
-  const [tab, setTab] = useState<'emoji' | 'upload'>('emoji');
+  const isImage = currentAvatar?.startsWith('data:image/') || currentAvatar?.startsWith('/') || currentAvatar?.startsWith('http');
+  const isModern = !currentAvatar || currentAvatar === '👤' || currentAvatar === 'default' || currentAvatar === 'user' || currentAvatar.startsWith('modern:');
+  const modernVariant = currentAvatar?.startsWith('modern:') ? currentAvatar.replace('modern:', '') : 'zenith';
+  const isEmoji = !isImage && !isModern && (currentAvatar?.length <= 4);
+
+  const [tab, setTab] = useState<'modern' | 'emoji' | 'upload'>(isModern ? 'modern' : isImage ? 'upload' : 'emoji');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -42,31 +63,39 @@ export function AvatarPicker({ currentAvatar, onAvatarChange }: AvatarPickerProp
     }
   };
 
-  const isEmoji = currentAvatar.length <= 4;
-  const isImage = currentAvatar.startsWith('data:image/');
-
   return (
     <div className="relative">
       {/* Avatar Display */}
       <button
         onClick={() => setShowPicker(!showPicker)}
-        className="relative w-24 h-24 rounded-full overflow-hidden border-2 border-white/20 hover:border-pink-500/50 transition-all group"
+        className="relative w-24 h-24 rounded-full overflow-hidden border-2 border-white/20 hover:border-[#00df81]/60 transition-all group shadow-lg"
       >
-        {isEmoji ? (
+        {isImage ? (
+          <Image
+            src={currentAvatar}
+            alt="Avatar"
+            width={96}
+            height={96}
+            unoptimized
+            className="w-full h-full object-cover"
+          />
+        ) : isModern ? (
+          <div className="w-full h-full flex items-center justify-center bg-[#090d16]">
+            <ModernUserIcon variant={modernVariant} className="w-full h-full" />
+          </div>
+        ) : isEmoji ? (
           <div className="w-full h-full flex items-center justify-center text-5xl bg-gradient-to-br from-purple-500/20 to-pink-500/20">
             {currentAvatar}
           </div>
-        ) : isImage ? (
-          <img src={currentAvatar} alt="Avatar" className="w-full h-full object-cover" />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-5xl bg-gradient-to-br from-purple-500/20 to-pink-500/20">
-            👤
+          <div className="w-full h-full flex items-center justify-center bg-[#090d16]">
+            <ModernUserIcon variant="zenith" className="w-full h-full" />
           </div>
         )}
-        
+
         {/* Edit Overlay */}
-        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-          <span className="text-xs font-medium">Edit</span>
+        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[2px]">
+          <span className="text-xs font-semibold text-[#00df81] tracking-wide uppercase">Edit</span>
         </div>
       </button>
 
@@ -74,36 +103,85 @@ export function AvatarPicker({ currentAvatar, onAvatarChange }: AvatarPickerProp
       {showPicker && (
         <>
           {/* Backdrop */}
-          <div 
+          <div
             className="fixed inset-0 z-40"
             onClick={() => setShowPicker(false)}
           />
-          
+
           {/* Picker Content */}
-          <div className="absolute left-0 top-28 z-50 w-80 bg-[#1a1f3a] border border-[#283341] rounded-lg shadow-2xl p-4">
+          <div className="absolute left-0 top-28 z-50 w-88 bg-[#090c12] border border-white/10 rounded-xl shadow-2xl p-4 backdrop-blur-xl">
             {/* Tabs */}
-            <div className="flex gap-2 mb-4">
+            <div className="flex gap-1.5 mb-4 p-1 bg-black/40 rounded-lg border border-white/5">
+              <button
+                onClick={() => setTab('modern')}
+                className={`flex-1 px-2.5 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                  tab === 'modern'
+                    ? 'bg-[#00df81]/20 text-[#00df81] border border-[#00df81]/40 shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                ✨ Modern
+              </button>
               <button
                 onClick={() => setTab('emoji')}
-                className={`flex-1 px-3 py-2 rounded text-sm font-medium transition-colors ${
+                className={`flex-1 px-2.5 py-1.5 rounded-md text-xs font-semibold transition-all ${
                   tab === 'emoji'
-                    ? 'bg-purple-500/20 text-purple-300 border border-purple-500/50'
-                    : 'bg-[#0f141b] text-slate-400 hover:text-slate-200 border border-[#283341]'
+                    ? 'bg-[#00df81]/20 text-[#00df81] border border-[#00df81]/40 shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
                 😀 Emoji
               </button>
               <button
                 onClick={() => setTab('upload')}
-                className={`flex-1 px-3 py-2 rounded text-sm font-medium transition-colors ${
+                className={`flex-1 px-2.5 py-1.5 rounded-md text-xs font-semibold transition-all ${
                   tab === 'upload'
-                    ? 'bg-purple-500/20 text-purple-300 border border-purple-500/50'
-                    : 'bg-[#0f141b] text-slate-400 hover:text-slate-200 border border-[#283341]'
+                    ? 'bg-[#00df81]/20 text-[#00df81] border border-[#00df81]/40 shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
                 📷 Upload
               </button>
             </div>
+
+            {/* Modern Tab */}
+            {tab === 'modern' && (
+              <div className="grid grid-cols-1 gap-2 max-h-72 overflow-y-auto pr-1">
+                {MODERN_AVATARS.map((item) => {
+                  const isSelected =
+                    (currentAvatar === item.id) ||
+                    (item.id === 'modern:cyber' && (currentAvatar === '👤' || !currentAvatar || currentAvatar === 'default'));
+
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        onAvatarChange(item.id);
+                        setShowPicker(false);
+                      }}
+                      className={`flex items-center gap-3 p-2 rounded-lg text-left transition-all border ${
+                        isSelected
+                          ? 'bg-[#00df81]/10 border-[#00df81]/50 shadow-[0_0_12px_rgba(0,223,129,0.15)]'
+                          : 'bg-white/[0.02] border-white/5 hover:bg-white/[0.06] hover:border-white/15'
+                      }`}
+                    >
+                      <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 border border-[#00df81]/30">
+                        <ModernUserIcon variant={item.variant} className="w-full h-full" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-semibold text-white truncate">{item.name}</p>
+                          <span className="text-[10px] font-mono text-[#00df81] uppercase px-1.5 py-0.5 rounded bg-[#00df81]/10">
+                            {item.tag}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 truncate">Preset vector icon</p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
             {/* Emoji Grid */}
             {tab === 'emoji' && (
@@ -115,8 +193,8 @@ export function AvatarPicker({ currentAvatar, onAvatarChange }: AvatarPickerProp
                       onAvatarChange(emoji);
                       setShowPicker(false);
                     }}
-                    className={`w-9 h-9 rounded-lg flex items-center justify-center text-2xl transition-all hover:bg-purple-500/20 ${
-                      currentAvatar === emoji ? 'bg-purple-500/30 ring-2 ring-purple-500' : 'bg-[#0f141b]'
+                    className={`w-9 h-9 rounded-lg flex items-center justify-center text-xl transition-all hover:bg-white/10 ${
+                      currentAvatar === emoji ? 'bg-[#00df81]/25 ring-2 ring-[#00df81]' : 'bg-[#0f141b]'
                     }`}
                   >
                     {emoji}
@@ -137,7 +215,7 @@ export function AvatarPicker({ currentAvatar, onAvatarChange }: AvatarPickerProp
                 />
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  className="w-full px-4 py-3 bg-purple-500/90 hover:bg-purple-500 text-white font-medium rounded transition-colors flex items-center justify-center gap-2"
+                  className="w-full px-4 py-3 bg-[#00df81] hover:bg-[#00f590] text-black font-semibold rounded-lg transition-all flex items-center justify-center gap-2 shadow-lg shadow-[#00df81]/20"
                 >
                   <span>📁</span>
                   Choose Image

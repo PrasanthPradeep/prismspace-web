@@ -1,3 +1,5 @@
+# Copyright 2026 Nobin Sijo (NobinSijo7T).
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 import argparse
 from .config import SETTINGS
@@ -29,7 +31,7 @@ def _load_curated(path):
     return loader.load_files([train_file])
 
 def main() -> None:
-    parser=argparse.ArgumentParser(); parser.add_argument("--dataset-dir",type=str,default=str(SETTINGS.dataset_dir)); parser.add_argument("--output-dir",type=str,default=str(SETTINGS.output_dir)); parser.add_argument("--curated-dir",type=str,default="model/datasets/curated"); parser.add_argument("--max-rows-per-file",type=int,default=50_000); parser.add_argument("--no-documents", action="store_true", help="Exclude document-like sources (Markdown, YAML, XML, LaTeX and text)."); parser.add_argument("--include-test-datasets", action="store_true", help="Allow test_datasets in training. This risks benchmark leakage."); args=parser.parse_args()
+    parser=argparse.ArgumentParser(); parser.add_argument("--dataset-dir",type=str,default=str(SETTINGS.dataset_dir)); parser.add_argument("--output-dir",type=str,default=str(SETTINGS.output_dir)); parser.add_argument("--curated-dir",type=str,default="model/datasets/training/curated"); parser.add_argument("--max-rows-per-file",type=int,default=50_000); parser.add_argument("--no-documents", action="store_true", help="Exclude document-like sources (Markdown, YAML, XML, LaTeX and text)."); parser.add_argument("--include-test-datasets", action="store_true", help="Allow benchmark data in training. This risks benchmark leakage."); args=parser.parse_args()
     settings=SETTINGS; output=__import__('pathlib').Path(args.output_dir); output.mkdir(parents=True,exist_ok=True); (output/'logs').mkdir(exist_ok=True); set_seed(settings.seed)
     print("Loading datasets...", flush=True)
     dataset_root = __import__('pathlib').Path(args.dataset_dir)

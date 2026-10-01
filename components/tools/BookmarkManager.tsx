@@ -1,6 +1,15 @@
+/**
+ * Copyright 2026 Nobin Sijo (NobinSijo7T).
+ * SPDX-License-Identifier: Apache-2.0
+ */
 'use client';
 
 import { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { BookmarkIcon } from './ToolIcons';
+import Image from 'next/image';
+import { Toolbar as KokonutToolbar, type ToolbarItem } from '@/components/kokonutui/toolbar';
+import { Plus, Wand2, FileDown, Code2, RefreshCw } from 'lucide-react';
 
 interface Bookmark {
   id: string;
@@ -205,26 +214,85 @@ ${bookmarks.map(b => `<DT><A HREF="${b.url}">${b.title}</A>`).join('\n')}
     }
   };
 
+  const toolbarItems: ToolbarItem[] = [
+    {
+      id: 'add',
+      title: 'Add',
+      icon: Plus,
+      onClick: addBookmark,
+    },
+    {
+      id: 'autofill',
+      title: 'Autofill',
+      icon: Wand2,
+      onClick: () => setTitle(titleFromUrl(url)),
+    },
+    {
+      id: 'export-json',
+      title: 'Export JSON',
+      icon: FileDown,
+      onClick: exportJson,
+    },
+    {
+      id: 'export-html',
+      title: 'Export HTML',
+      icon: Code2,
+      onClick: exportHtml,
+    },
+    {
+      id: 'reset',
+      title: 'Reset Search',
+      icon: RefreshCw,
+      onClick: () => {
+        setSearchTerm('');
+        setSelectedTag('');
+      },
+    },
+  ];
+
   return (
     <div className="min-h-screen bg-gradient-radial from-[#173145] via-[#0b0e13] to-[#0b0e13] text-white p-6">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold">Bookmark Manager</h1>
-        <p className="text-sm text-slate-400 mt-2">
-          Save, tag, search, import, and export local bookmarks. Works offline except favicons.
-        </p>
+      <div className="mb-6 flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-3.5">
+          <div
+            className="w-12 h-12 rounded-xl flex items-center justify-center relative"
+            style={{
+              background: 'linear-gradient(135deg, rgba(0, 223, 129, 0.15) 0%, rgba(5, 150, 105, 0.08) 100%)',
+              border: '1px solid rgba(0, 223, 129, 0.25)',
+              boxShadow: '0 0 16px rgba(0, 223, 129, 0.15)',
+            }}
+          >
+            <BookmarkIcon size={26} glow />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
+              Bookmark Manager
+            </h1>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Save, tag, search, import, and export local bookmarks. Works offline.
+            </p>
+          </div>
+        </div>
+
+        {/* KokonutUI Toolbar */}
+        <KokonutToolbar
+          items={toolbarItems}
+          showToggle={false}
+          notificationMessage={(item) => `${item.title} activated`}
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-5">
         {/* Add Bookmark Panel */}
-        <section className="bg-[rgba(18,24,33,0.94)] border border-[#283241] rounded-[18px] p-[18px] space-y-3">
-          <h2 className="text-xl font-bold">Add Bookmark</h2>
+        <section className="bg-[rgba(18,24,33,0.94)] border border-[#283241] rounded-[18px] p-5 space-y-3">
+          <h2 className="text-sm font-bold text-slate-200 uppercase tracking-wider font-mono">Add Bookmark</h2>
           
           <input
             type="text"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             placeholder="https://example.com"
-            className="w-full bg-[#0f141b] border border-[#283241] rounded-xl px-3 py-2 text-white"
+            className="w-full bg-black/60 border border-white/10 focus:border-[#00df81] focus:ring-2 focus:ring-[#00df81]/20 outline-none transition-all rounded-xl px-3.5 py-2.5 text-xs text-white placeholder:text-slate-500 font-mono"
           />
           
           <input
@@ -232,7 +300,7 @@ ${bookmarks.map(b => `<DT><A HREF="${b.url}">${b.title}</A>`).join('\n')}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Title"
-            className="w-full bg-[#0f141b] border border-[#283241] rounded-xl px-3 py-2 text-white"
+            className="w-full bg-black/60 border border-white/10 focus:border-[#00df81] focus:ring-2 focus:ring-[#00df81]/20 outline-none transition-all rounded-xl px-3.5 py-2.5 text-xs text-white placeholder:text-slate-500"
           />
           
           <input
@@ -240,14 +308,14 @@ ${bookmarks.map(b => `<DT><A HREF="${b.url}">${b.title}</A>`).join('\n')}
             value={tags}
             onChange={(e) => setTags(e.target.value)}
             placeholder="tags, separated, by commas"
-            className="w-full bg-[#0f141b] border border-[#283241] rounded-xl px-3 py-2 text-white"
+            className="w-full bg-black/60 border border-white/10 focus:border-[#00df81] focus:ring-2 focus:ring-[#00df81]/20 outline-none transition-all rounded-xl px-3.5 py-2.5 text-xs text-white placeholder:text-slate-500 font-mono"
           />
           
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder="Notes"
-            className="w-full bg-[#0f141b] border border-[#283241] rounded-xl px-3 py-2 text-white min-h-[90px] resize-y"
+            className="w-full bg-black/60 border border-white/10 focus:border-[#00df81] focus:ring-2 focus:ring-[#00df81]/20 outline-none transition-all rounded-xl px-3.5 py-2.5 text-xs text-white placeholder:text-slate-500 min-h-[90px] resize-y"
           />
           
           <div className="flex gap-3 flex-wrap">
@@ -329,69 +397,79 @@ ${bookmarks.map(b => `<DT><A HREF="${b.url}">${b.title}</A>`).join('\n')}
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {filteredBookmarks().map(bookmark => {
-                const domain = new URL(bookmark.url).hostname.replace(/^www\./, '');
-                
-                return (
-                  <article
-                    key={bookmark.id}
-                    className="bg-[#0f141b] border border-[#283241] rounded-2xl p-4 space-y-3 hover:border-[#3a4658] transition"
-                  >
-                    <div className="grid grid-cols-[40px_1fr_auto] gap-3 items-center">
-                      <img
-                        src={getFavicon(bookmark.url)}
-                        alt=""
-                        className="w-10 h-10 rounded-xl bg-[#1a2330]"
-                        onError={(e) => {
-                          e.currentTarget.style.display = 'none';
-                          const div = document.createElement('div');
-                          div.className = 'w-10 h-10 rounded-xl bg-[#1a2330] flex items-center justify-center font-bold';
-                          div.textContent = bookmark.title.charAt(0).toUpperCase();
-                          e.currentTarget.parentElement?.insertBefore(div, e.currentTarget);
-                        }}
-                      />
-                      <div>
-                        <strong className="block">{bookmark.title}</strong>
-                        <div className="text-sm text-slate-400">{domain}</div>
-                      </div>
-                      <button
-                        onClick={() => openBookmark(bookmark.id)}
-                        className="bg-[#0f141b] border border-[#283241] rounded-xl px-3 py-1 text-sm hover:bg-[#1a2330] transition"
-                      >
-                        Open
-                      </button>
-                    </div>
-                    
-                    <div className="text-sm text-slate-400 break-all">{bookmark.url}</div>
-                    
-                    <div className="flex flex-wrap gap-2">
-                      {bookmark.tags.map(tag => (
-                        <span
-                          key={tag}
-                          className="px-2 py-1 rounded-full bg-[rgba(255,255,255,0.06)] text-xs text-slate-400"
-                        >
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                    
-                    <div className="text-sm text-slate-400">
-                      {bookmark.notes || 'No notes'}
-                    </div>
-                    
-                    <div className="text-sm text-slate-400">
-                      Last visited: {bookmark.lastVisited ? new Date(bookmark.lastVisited).toLocaleString() : 'Never'}
-                    </div>
-                    
-                    <button
-                      onClick={() => deleteBookmark(bookmark.id)}
-                      className="bg-[#0f141b] border border-[#283241] rounded-xl px-3 py-1 text-sm hover:bg-[rgba(239,68,68,0.12)] hover:border-[rgba(239,68,68,0.4)] transition"
+              <AnimatePresence mode="popLayout">
+                {filteredBookmarks().map(bookmark => {
+                  const domain = new URL(bookmark.url).hostname.replace(/^www\./, '');
+                  
+                  return (
+                    <motion.article
+                      key={bookmark.id}
+                      layout
+                      initial={{ opacity: 0, scale: 0.96 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.96 }}
+                      transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                      className="bg-[#0f141b] border border-[#283241] rounded-2xl p-4 space-y-3 hover:border-[#3a4658] transition"
                     >
-                      Delete
-                    </button>
-                  </article>
-                );
-              })}
+                      <div className="grid grid-cols-[40px_1fr_auto] gap-3 items-center">
+                        <Image
+                          src={getFavicon(bookmark.url)}
+                          alt=""
+                          width={40}
+                          height={40}
+                          unoptimized
+                          className="w-10 h-10 rounded-xl bg-[#1a2330]"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                            const div = document.createElement('div');
+                            div.className = 'w-10 h-10 rounded-xl bg-[#1a2330] flex items-center justify-center font-bold';
+                            div.textContent = bookmark.title.charAt(0).toUpperCase();
+                            e.currentTarget.parentElement?.insertBefore(div, e.currentTarget);
+                          }}
+                        />
+                        <div>
+                          <strong className="block">{bookmark.title}</strong>
+                          <div className="text-sm text-slate-400">{domain}</div>
+                        </div>
+                        <button
+                          onClick={() => openBookmark(bookmark.id)}
+                          className="bg-[#0f141b] border border-[#283241] rounded-xl px-3 py-1 text-sm hover:bg-[#1a2330] active:scale-95 transition"
+                        >
+                          Open
+                        </button>
+                      </div>
+                      
+                      <div className="text-sm text-slate-400 break-all">{bookmark.url}</div>
+                      
+                      <div className="flex flex-wrap gap-2">
+                        {bookmark.tags.map(tag => (
+                          <span
+                            key={tag}
+                            className="px-2 py-1 rounded-full bg-[rgba(255,255,255,0.06)] text-xs text-slate-400"
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                      
+                      <div className="text-sm text-slate-400">
+                        {bookmark.notes || 'No notes'}
+                      </div>
+                      
+                      <div className="text-sm text-slate-400">
+                        Last visited: {bookmark.lastVisited ? new Date(bookmark.lastVisited).toLocaleString() : 'Never'}
+                      </div>
+                      
+                      <button
+                        onClick={() => deleteBookmark(bookmark.id)}
+                        className="bg-[#0f141b] border border-[#283241] rounded-xl px-3 py-1 text-sm hover:bg-[rgba(239,68,68,0.12)] hover:border-[rgba(239,68,68,0.4)] active:scale-95 transition"
+                      >
+                        Delete
+                      </button>
+                    </motion.article>
+                  );
+                })}
+              </AnimatePresence>
             </div>
           )}
         </section>

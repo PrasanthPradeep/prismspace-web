@@ -1,0 +1,45 @@
+PrismSpace third-party notices
+
+Project source
+--------------
+The original PrismSpace source is copyright © 2026 Nobin Sijo
+(GitHub: NobinSijo7T) and is licensed under Apache-2.0. This statement
+applies only to PrismSpace-authored material and does not claim ownership of
+third-party components.
+
+Contribution scope
+------------------
+Dev Space tools may be collaboratively improved under CONTRIBUTING.md. Core
+AI/model code, model weights, datasets, artifacts, routing, and safety
+behavior are maintainer-controlled and require prior authorization. This is a
+repository contribution policy and does not modify the standard Apache-2.0
+license or grant rights to third-party model/data materials.
+
+JavaScript dependencies
+-----------------------
+The resolved npm tree includes MIT, ISC, Apache-2.0, BSD-2-Clause,
+BSD-3-Clause, 0BSD, Unlicense, CC0-1.0, BlueOak-1.0.0, Python-2.0, and
+CC-BY-4.0 packages. Their original notices and license texts remain in the
+package distributions under node_modules and must be preserved when those
+packages are redistributed. The complete package-level findings and sources
+are in LICENSE_AUDIT.md.
+
+Manual-review packages include GSAP 3.15.0 (custom "no charge" license),
+@react-three/rapier 1.5.0 (no license field in its installed manifest),
+busboy 1.6.0, fast-shallow-equal 1.0.0, react-universal-interface 0.6.2,
+webgl-constants 1.1.1, and streamsearch 1.1.0 (no license field detected).
+
+Non-code materials
+------------------
+Bundled fonts, images, SVGs, 3D models, generated PDFs, and SQLite WASM
+files have no repository-level provenance or license inventory. They are not
+covered by the project Apache-2.0 grant unless their own rights permit it.
+Do not redistribute them until their individual permissions are verified.
+
+Datasets and model artifacts
+----------------------------
+The model/datasets and model/artifacts directories are ignored by Git, but
+may be present in local deployment builds. They contain third-party and
+gated datasets/model materials with separate terms. In particular, the
+bundled GAIA README requires that validation/test data not be reshared in a
+crawlable format. See LICENSE_AUDIT.md.

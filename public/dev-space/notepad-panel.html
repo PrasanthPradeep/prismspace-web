@@ -1,3 +1,6 @@
+<!-- Copyright 2026 Nobin Sijo (NobinSijo7T).
+     SPDX-License-Identifier: Apache-2.0
+-->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -788,8 +791,10 @@
                 const tab = document.createElement('div');
                 tab.className = 'notepad-tab' + (index === currentTabIndex ? ' active' : '');
                 tab.setAttribute('data-tab', index);
+                tab.title = 'Double-click to rename';
+                tab.ondblclick = (e) => editTabName(index, e);
                 tab.innerHTML = `
-                    <span class="tab-name" onclick="switchTab(${index})" ondblclick="editTabName(${index}, event)">${note.title}</span>
+                    <span class="tab-name" onclick="switchTab(${index})">${note.title}</span>
                     <span class="tab-edit" onclick="editTabName(${index}, event)" title="Rename">✎</span>
                     ${notes.length > 1 ? `<span class="tab-close" onclick="deleteTab(${index}, event)">×</span>` : ''}
                 `;

@@ -1,7 +1,13 @@
+/**
+ * Copyright 2026 Nobin Sijo (NobinSijo7T).
+ * SPDX-License-Identifier: Apache-2.0
+ */
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import dynamic from 'next/dynamic';
 import Image from 'next/image';
+import { motion, AnimatePresence } from 'motion/react';
 import { ClockStyle } from './Clock';
 import { ClockPreview } from './ClockPreview';
 import { AvatarPicker } from './AvatarPicker';
@@ -9,6 +15,59 @@ import { AppleSwitch } from '@/components/unlumen-ui/apple-switch';
 import ExposureSlider from '@/components/ui/smoothui/exposure-slider';
 import { db, UserProfile } from '@/lib/db';
 import ProfileCard from './ProfileCard';
+import { CosmicButton } from '@/components/ui/cosmic-button';
+import { getModernIconSvgDataUri } from '@/components/ui/ModernUserIcon';
+import { generateLanyardTexture } from '@/lib/generateLanyardTexture';
+
+const Lanyard = dynamic(() => import('@/components/Lanyard'), {
+  ssr: false,
+  loading: () => (
+    <div
+      style={{
+        width: '100%',
+        height: '100%',
+        minHeight: 580,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 16,
+        background: 'linear-gradient(180deg, rgba(13, 21, 32, 0.6) 0%, rgba(5, 7, 10, 0.9) 100%)',
+        borderRadius: 20,
+      }}
+    >
+      <div
+        style={{
+          width: 220,
+          height: 330,
+          borderRadius: 16,
+          border: '1px solid rgba(0, 223, 129, 0.25)',
+          background: 'radial-gradient(circle at 50% 20%, rgba(0, 223, 129, 0.08) 0%, rgba(10, 16, 24, 0.7) 70%)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 14,
+          padding: 16,
+          boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
+        }}
+      >
+        <div style={{ width: 48, height: 48, borderRadius: '50%', border: '2px solid #00df81', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>
+          🔥
+        </div>
+        <div style={{ width: 100, height: 12, borderRadius: 6, background: 'rgba(255,255,255,0.1)' }} />
+        <div style={{ width: 140, height: 8, borderRadius: 4, background: 'rgba(255,255,255,0.06)' }} />
+        <div style={{ width: '85%', height: 36, borderRadius: 8, background: 'rgba(0,223,129,0.08)', marginTop: 8 }} />
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ width: 14, height: 14, borderRadius: '50%', border: '2px solid rgba(0,223,129,0.2)', borderTopColor: '#00df81', animation: 'spin 0.8s linear infinite' }} />
+        <span style={{ fontFamily: 'JetBrains Mono', fontSize: 11, color: '#64748b', letterSpacing: '0.05em' }}>
+          LOADING 3D BADGE...
+        </span>
+      </div>
+    </div>
+  ),
+});
 
 type SettingsSection = 'clock' | 'themes' | 'stats' | 'quotes' | 'extras' | 'profile';
 type BackgroundMediaType = 'image' | 'video';
@@ -50,7 +109,7 @@ const clockStyles: { name: string; value: ClockStyle }[] = [
 ];
 
 const backgrounds: BackgroundChoice[] = [
-  { name: 'Default', path: '/images/BG.png', mediaType: 'image' },
+  { name: 'Default', path: '/bg.png', mediaType: 'image' },
   { name: 'Animated 1', path: '/images/bg-gifs/1.gif', mediaType: 'image' },
   { name: 'Animated 2', path: '/images/bg-gifs/2.gif', mediaType: 'image' },
   { name: 'Wallpaper 1', path: '/images/Wallpapers/1 (1).jpg', mediaType: 'image' },
@@ -87,8 +146,10 @@ function toSelectedBackground(value: string): StoredBackgroundSetting {
 }
 
 function getSelectionId(setting: StoredBackgroundSetting | null | undefined) {
-  if (!setting) return '/images/BG.png';
-  return setting.source === 'custom' ? 'custom' : setting.path || '/images/BG.png';
+  if (!setting) return '/bg.png';
+  if (setting.source === 'custom') return 'custom';
+  if (setting.path === '/images/BG.png' || setting.path === '/bg.png') return '/bg.png';
+  return setting.path || '/bg.png';
 }
 
 export function SettingsModal({ onClose }: { onClose: () => void }) {
@@ -97,28 +158,89 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   const [clockStyle, setClockStyle] = useState<ClockStyle>('default');
   const [clockColor, setClockColor] = useState('#ffffff');
   const [colorHistory, setColorHistory] = useState<string[]>([]);
-  const [selectedBg, setSelectedBg] = useState('/images/BG.png');
+  const [selectedBg, setSelectedBg] = useState('/bg.png');
   const [customPreviewUrl, setCustomPreviewUrl] = useState<string | null>(null);
   const [customMediaType, setCustomMediaType] = useState<BackgroundMediaType>('image');
   const [dynamicGreetings, setDynamicGreetings] = useState(true);
   const [showGreetings, setShowGreetings] = useState(true);
-  const [customCursor, setCustomCursor] = useState(true);
   const [dynamicIsland, setDynamicIsland] = useState(true);
   const [dynamicIslandSeconds, setDynamicIslandSeconds] = useState(false);
   const [dynamicIslandExpand, setDynamicIslandExpand] = useState(true);
   const [wallpaperOpacity, setWallpaperOpacity] = useState(100);
   const [devtoolsOpacity, setDevtoolsOpacity] = useState(100);
-  
+
   // Profile states
   const [username, setUsername] = useState('User');
-  const [avatar, setAvatar] = useState('👤');
+  const [avatar, setAvatar] = useState('modern:cyber');
   const [isEditingUsername, setIsEditingUsername] = useState(false);
   const [tempUsername, setTempUsername] = useState('');
-  
+
   // Profile card extra fields
-  const [cardHandle, setCardHandle] = useState('');
-  const [cardTitle, setCardTitle] = useState('PrismSpace User');
+  const [cardHandle, setCardHandle] = useState(() => (typeof window !== 'undefined' ? localStorage.getItem('profile_card_handle') || '' : ''));
+  const [cardTitle, setCardTitle] = useState(() => (typeof window !== 'undefined' ? localStorage.getItem('profile_card_title') || 'PrismSpace User' : 'PrismSpace User'));
+  const [cardTagline, setCardTagline] = useState(() => (typeof window !== 'undefined' ? localStorage.getItem('profile_card_tagline') || 'You code it. Now orchestrate.' : 'You code it. Now orchestrate.'));
   const [cardAvatarUrl, setCardAvatarUrl] = useState('');
+  const [cardTags, setCardTags] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('profile_card_tags');
+        if (stored) return JSON.parse(stored);
+      } catch (e) {}
+    }
+    return ['AI/ML', 'Cybersecurity', 'Full-stack'];
+  });
+  const [newTagInput, setNewTagInput] = useState('');
+
+  const handleAddTag = (tagToAdd: string) => {
+    const trimmed = tagToAdd.trim().replace(/^#/, '');
+    if (!trimmed) return;
+    if (cardTags.some((t) => t.toLowerCase() === trimmed.toLowerCase())) return;
+    if (cardTags.length >= 8) return;
+    const updated = [...cardTags, trimmed];
+    setCardTags(updated);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('profile_card_tags', JSON.stringify(updated));
+    }
+    setNewTagInput('');
+  };
+
+  const handleRemoveTag = (tagToRemove: string) => {
+    const updated = cardTags.filter((t) => t !== tagToRemove);
+    setCardTags(updated);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('profile_card_tags', JSON.stringify(updated));
+    }
+  };
+
+  const lanyardFrontImage = useMemo(() => {
+    if (activeSection !== 'profile' || typeof window === 'undefined') return '';
+    return generateLanyardTexture({
+      name: username,
+      title: cardTitle,
+      tagline: cardTagline,
+      tags: cardTags,
+      handle: cardHandle || username.toLowerCase().replace(/\s+/g, ''),
+      avatar: cardAvatarUrl || (avatar.startsWith('modern:') || !avatar ? '🔥' : avatar),
+    });
+  }, [activeSection, username, cardTitle, cardTagline, cardTags, cardHandle, cardAvatarUrl, avatar]);
+
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (contentRef.current) {
+      contentRef.current.scrollTop = 0;
+    }
+  }, [activeSection]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !isEditingUsername) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose, isEditingUsername]);
 
   useEffect(() => {
     return () => {
@@ -134,15 +256,13 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
     const savedHistory = JSON.parse(localStorage.getItem('colorHistory') || '[]');
     const savedDynamicGreetings = localStorage.getItem('dynamicGreetings') !== 'false';
     const savedShowGreetings = localStorage.getItem('showGreetings') !== 'false';
-    const savedCustomCursor = localStorage.getItem('customCursor') !== 'false';
-    
+
     setClockFormat(savedFormat);
     setClockStyle(savedStyle);
     setClockColor(savedColor);
     setColorHistory(savedHistory);
     setDynamicGreetings(savedDynamicGreetings);
     setShowGreetings(savedShowGreetings);
-    setCustomCursor(savedCustomCursor);
     setDynamicIsland(localStorage.getItem('dynamicIsland') !== 'false');
     setDynamicIslandSeconds(localStorage.getItem('dynamicIslandSeconds') === 'true');
     setDynamicIslandExpand(localStorage.getItem('dynamicIslandExpand') !== 'false');
@@ -161,14 +281,14 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
         const profile = await db.user_profile.get('current');
         if (profile) {
           setUsername(profile.username);
-          setAvatar(profile.avatar);
+          setAvatar(profile.avatar === '👤' ? 'modern:cyber' : profile.avatar);
         } else {
           // Create default profile
           const now = new Date();
           await db.user_profile.put({
             key: 'current',
             username: 'User',
-            avatar: '👤',
+            avatar: 'modern:cyber',
             createdAt: now,
             updatedAt: now,
           });
@@ -190,7 +310,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
           ? (JSON.parse(savedSetting.value) as StoredBackgroundSetting)
           : null;
         const legacyBg = localStorage.getItem('selectedBackground');
-        const nextSetting = parsedSetting || toSelectedBackground(legacyBg || '/images/BG.png');
+        const nextSetting = parsedSetting || toSelectedBackground(legacyBg || '/bg.png');
 
         if (!parsedSetting && legacyBg) {
           await db.settings.put({
@@ -241,12 +361,12 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   const handleColorChange = (color: string) => {
     setClockColor(color);
     localStorage.setItem('clockColor', color);
-    
+
     // Add to history
     const newHistory = [color, ...colorHistory.filter(c => c !== color)].slice(0, 10);
     setColorHistory(newHistory);
     localStorage.setItem('colorHistory', JSON.stringify(newHistory));
-    
+
     window.location.reload();
   };
 
@@ -271,11 +391,11 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
     const background = backgrounds.find((item) => item.path === bgPath);
     const setting: StoredBackgroundSetting = background
       ? {
-          source: 'static',
-          mediaType: background.mediaType,
-          path: background.path,
-          name: background.name,
-        }
+        source: 'static',
+        mediaType: background.mediaType,
+        path: background.path,
+        name: background.name,
+      }
       : toSelectedBackground(bgPath);
 
     setSelectedBg(getSelectionId(setting));
@@ -359,196 +479,933 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   ];
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-lg z-[1000] flex items-center justify-center p-4">
-      <div className="glass-dark rounded-3xl max-w-6xl w-full max-h-[90vh] overflow-hidden flex">
-        {/* Sidebar */}
-        <div className="w-64 bg-black/50 p-6 flex flex-col overflow-y-auto">
-          <div className="mb-8">
-            <Image src="/images/prism-logo.svg" alt="Prism" width={40} height={40} />
-          </div>
-          
-          <nav className="flex-1 space-y-2">
-            {navItems.map(item => (
-              <button
-                key={item.id}
-                onClick={() => setActiveSection(item.id)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all text-left ${
-                  activeSection === item.id ? 'bg-white/10' : 'hover:bg-white/5'
-                }`}
-              >
-                <span>{item.icon}</span>
-                <span className="text-sm">{item.label}</span>
-              </button>
-            ))}
-          </nav>
+    <div
+      className="fixed inset-0 z-[1000] flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(16px)' }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <style>{`
+        /* ── PrismSpace Settings Modal Design System ── */
+        .sm-root {
+          display: flex;
+          width: 100%;
+          max-width: 1100px;
+          max-height: 90vh;
+          border-radius: 20px;
+          overflow: hidden;
+          background: #090c12;
+          background-image:
+            linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+          background-size: 24px 24px;
+          border: 1px solid rgba(255,255,255,0.08);
+          box-shadow: 0 30px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(0,223,129,0.08);
+          font-family: 'Space Grotesk', sans-serif;
+          color: #f1f5f9;
+        }
 
-          <div className="mt-6 space-y-2">
+        /* Sidebar */
+        .sm-sidebar {
+          width: 220px;
+          flex-shrink: 0;
+          background: rgba(0,0,0,0.5);
+          border-right: 1px solid rgba(255,255,255,0.06);
+          display: flex;
+          flex-direction: column;
+          padding: 24px 14px;
+          overflow-y: auto;
+        }
+
+        .sm-logo-wrap {
+          padding: 0 6px;
+          margin-bottom: 24px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 8px;
+        }
+
+        .sm-logo-version {
+          font-family: 'JetBrains Mono', monospace;
+          font-size: 9px;
+          font-weight: 700;
+          letter-spacing: 0.04em;
+          color: #00df81;
+          background: rgba(0, 223, 129, 0.08);
+          border: 1px solid rgba(0, 223, 129, 0.22);
+          padding: 2px 6px;
+          border-radius: 4px;
+          line-height: 1.2;
+          flex-shrink: 0;
+        }
+
+        .sm-nav-section-label {
+          font-family: 'JetBrains Mono', monospace;
+          font-size: 9px;
+          font-weight: 700;
+          letter-spacing: 0.10em;
+          text-transform: uppercase;
+          color: #475569;
+          padding: 0 10px;
+          margin-bottom: 6px;
+          margin-top: 4px;
+        }
+
+        .sm-nav-btn {
+          position: relative;
+          width: 100%;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 9px 10px;
+          border-radius: 8px;
+          border: 1px solid transparent;
+          background: transparent;
+          cursor: pointer;
+          text-align: left;
+          font-family: 'Space Grotesk', sans-serif;
+          margin-bottom: 2px;
+          outline: none;
+        }
+
+        .sm-nav-btn:hover:not(.active) {
+          background: rgba(255,255,255,0.04);
+          border-color: rgba(255,255,255,0.06);
+        }
+
+        .sm-nav-pill {
+          position: absolute;
+          inset: 0;
+          border-radius: 8px;
+          background: rgba(0,223,129,0.08);
+          border: 1px solid rgba(0,223,129,0.25);
+          pointer-events: none;
+          z-index: 0;
+          box-shadow: 0 0 16px rgba(0, 223, 129, 0.08);
+        }
+
+        .sm-nav-icon {
+          position: relative;
+          z-index: 1;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 26px;
+          height: 26px;
+          border-radius: 6px;
+          background: rgba(255,255,255,0.04);
+          border: 1px solid rgba(255,255,255,0.06);
+          flex-shrink: 0;
+          color: #64748b;
+          transition: all 0.2s ease;
+        }
+
+        .sm-nav-btn.active .sm-nav-icon {
+          background: rgba(0,223,129,0.12);
+          border-color: rgba(0,223,129,0.3);
+          color: #00df81;
+        }
+
+        .sm-nav-label {
+          position: relative;
+          z-index: 1;
+          font-size: 13px;
+          font-weight: 600;
+          color: #64748b;
+          transition: color 0.2s ease;
+        }
+
+        .sm-nav-btn.active .sm-nav-label {
+          color: #f1f5f9;
+        }
+
+        .sm-nav-btn:hover:not(.active) .sm-nav-label {
+          color: #cbd5e1;
+        }
+
+        .sm-nav-indicator {
+          position: relative;
+          z-index: 1;
+          width: 4px;
+          height: 4px;
+          border-radius: 50%;
+          background: #00df81;
+          margin-left: auto;
+          box-shadow: 0 0 6px #00df81;
+          flex-shrink: 0;
+        }
+
+        /* Content Area */
+        .sm-content {
+          flex: 1;
+          overflow-y: auto;
+          padding: 32px 36px;
+          position: relative;
+          min-width: 0;
+        }
+
+        .sm-content::-webkit-scrollbar { width: 5px; }
+        .sm-content::-webkit-scrollbar-track { background: transparent; }
+        .sm-content::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.07); border-radius: 3px; }
+        .sm-content::-webkit-scrollbar-thumb:hover { background: rgba(0,223,129,0.3); }
+
+        /* Section Headers */
+        .sm-section-kicker {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          font-family: 'JetBrains Mono', monospace;
+          font-size: 10px;
+          font-weight: 800;
+          letter-spacing: 0.10em;
+          text-transform: uppercase;
+          color: #00df81;
+          background: #000;
+          padding: 3px 10px 4px;
+          border-radius: 4px;
+          margin-bottom: 12px;
+        }
+
+        .sm-section-title {
+          font-family: 'Space Grotesk', sans-serif;
+          font-size: 24px;
+          font-weight: 800;
+          letter-spacing: -0.03em;
+          color: #ffffff;
+          line-height: 1.1;
+          margin-bottom: 6px;
+        }
+
+        .sm-section-desc {
+          font-size: 13px;
+          font-weight: 400;
+          color: #64748b;
+          margin-bottom: 28px;
+          line-height: 1.5;
+        }
+
+        /* Cards / Panels */
+        .sm-panel {
+          background: rgba(255,255,255,0.025);
+          border: 1px solid rgba(255,255,255,0.07);
+          border-radius: 12px;
+          padding: 20px;
+          transition: border-color 0.15s;
+        }
+
+        .sm-panel-title {
+          font-family: 'JetBrains Mono', monospace;
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: #94a3b8;
+          margin-bottom: 16px;
+        }
+
+        /* Toggle Rows */
+        .sm-toggle-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 14px 16px;
+          border-radius: 10px;
+          background: rgba(255,255,255,0.02);
+          border: 1px solid rgba(255,255,255,0.05);
+          transition: all 0.15s ease;
+        }
+
+        .sm-toggle-row:hover {
+          background: rgba(255,255,255,0.04);
+          border-color: rgba(255,255,255,0.09);
+        }
+
+        .sm-toggle-label {
+          font-size: 13px;
+          font-weight: 600;
+          color: #f1f5f9;
+          margin-bottom: 2px;
+        }
+
+        .sm-toggle-desc {
+          font-size: 11.5px;
+          color: #64748b;
+          line-height: 1.4;
+        }
+
+        /* Format / Selector Cards */
+        .sm-format-card {
+          flex: 1;
+          padding: 20px;
+          border-radius: 12px;
+          border: 2px solid rgba(255,255,255,0.08);
+          background: rgba(255,255,255,0.02);
+          cursor: pointer;
+          transition: all 0.2s ease;
+          text-align: left;
+        }
+
+        .sm-format-card:hover {
+          border-color: rgba(0,223,129,0.3);
+          background: rgba(0,223,129,0.04);
+        }
+
+        .sm-format-card.selected {
+          border-color: #00df81;
+          background: rgba(0,223,129,0.08);
+          box-shadow: 0 0 24px rgba(0,223,129,0.15);
+        }
+
+        .sm-format-time {
+          font-family: 'Space Grotesk', sans-serif;
+          font-size: 36px;
+          font-weight: 800;
+          letter-spacing: -0.04em;
+          color: #ffffff;
+          margin-bottom: 6px;
+          line-height: 1;
+        }
+
+        .sm-format-card.selected .sm-format-time {
+          color: #00df81;
+        }
+
+        .sm-format-label {
+          font-family: 'JetBrains Mono', monospace;
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: #64748b;
+        }
+
+        .sm-format-card.selected .sm-format-label {
+          color: #00df81;
+        }
+
+        .sm-format-check {
+          float: right;
+          width: 20px;
+          height: 20px;
+          border-radius: 50%;
+          background: #00df81;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin-top: -4px;
+        }
+
+        /* Color input */
+        .sm-color-input-wrap {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 10px 14px;
+          background: rgba(0,0,0,0.3);
+          border: 1px solid rgba(255,255,255,0.08);
+          border-radius: 10px;
+        }
+
+        .sm-color-swatch {
+          width: 36px;
+          height: 36px;
+          border-radius: 8px;
+          border: none;
+          cursor: pointer;
+          padding: 0;
+          background: transparent;
+          flex-shrink: 0;
+        }
+
+        .sm-color-text-input {
+          flex: 1;
+          background: transparent;
+          border: none;
+          outline: none;
+          font-family: 'JetBrains Mono', monospace;
+          font-size: 13px;
+          font-weight: 600;
+          color: #f1f5f9;
+          letter-spacing: 0.04em;
+        }
+
+        .sm-color-reset-btn {
+          font-family: 'JetBrains Mono', monospace;
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          color: #64748b;
+          background: rgba(255,255,255,0.04);
+          border: 1px solid rgba(255,255,255,0.08);
+          border-radius: 6px;
+          padding: 5px 10px;
+          cursor: pointer;
+          transition: all 0.15s;
+        }
+
+        .sm-color-reset-btn:hover {
+          color: #f1f5f9;
+          border-color: rgba(255,255,255,0.15);
+          background: rgba(255,255,255,0.07);
+        }
+
+        .sm-history-swatch {
+          width: 32px;
+          height: 32px;
+          border-radius: 8px;
+          border: 2px solid rgba(255,255,255,0.1);
+          cursor: pointer;
+          transition: all 0.15s;
+          flex-shrink: 0;
+        }
+
+        .sm-history-swatch:hover {
+          border-color: rgba(0,223,129,0.5);
+          transform: scale(1.1);
+          box-shadow: 0 0 12px rgba(0,223,129,0.25);
+        }
+
+        /* Clock style grid */
+        .sm-clock-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 12px;
+        }
+
+        .sm-clock-card {
+          position: relative;
+          overflow: hidden;
+          border-radius: 14px;
+          aspect-ratio: 16/11;
+          cursor: pointer;
+          border: 2px solid rgba(255,255,255,0.07);
+          background: rgba(255,255,255,0.02);
+          transition: all 0.2s ease;
+        }
+
+        .sm-clock-card:hover {
+          border-color: rgba(255,255,255,0.2);
+          box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+        }
+
+        .sm-clock-card.selected {
+          border-color: #00df81;
+          box-shadow: 0 0 32px rgba(0,223,129,0.2);
+        }
+
+        .sm-clock-card-label {
+          position: absolute;
+          bottom: 0;
+          left: 0;
+          right: 0;
+          padding: 10px 12px;
+          backdrop-filter: blur(12px);
+          background: linear-gradient(to top, rgba(0,0,0,0.7), transparent);
+          font-family: 'JetBrains Mono', monospace;
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 0.05em;
+          color: #94a3b8;
+        }
+
+        .sm-clock-card.selected .sm-clock-card-label {
+          color: #00df81;
+          background: linear-gradient(to top, rgba(0,223,129,0.15), transparent);
+        }
+
+        .sm-clock-card-check {
+          position: absolute;
+          top: 8px;
+          right: 8px;
+          width: 20px;
+          height: 20px;
+          border-radius: 50%;
+          background: #00df81;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 0 10px rgba(0,223,129,0.5);
+        }
+
+        /* Background grid */
+        .sm-bg-grid {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 10px;
+        }
+
+        .sm-bg-thumb {
+          aspect-ratio: 16/9;
+          border-radius: 10px;
+          overflow: hidden;
+          border: 2px solid rgba(255,255,255,0.08);
+          cursor: pointer;
+          transition: all 0.18s ease;
+          position: relative;
+        }
+
+        .sm-bg-thumb:hover {
+          border-color: rgba(255,255,255,0.25);
+          transform: scale(1.02);
+        }
+
+        .sm-bg-thumb.selected {
+          border-color: #00df81;
+          box-shadow: 0 0 16px rgba(0,223,129,0.35);
+        }
+
+        .sm-bg-custom-label {
+          position: absolute;
+          top: 6px;
+          left: 6px;
+          font-family: 'JetBrains Mono', monospace;
+          font-size: 8.5px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+          color: #00df81;
+          background: rgba(0,0,0,0.7);
+          border: 1px solid rgba(0,223,129,0.3);
+          padding: 2px 6px;
+          border-radius: 3px;
+        }
+
+        /* Upload button */
+        .sm-upload-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          font-family: 'Space Grotesk', sans-serif;
+          font-size: 12px;
+          font-weight: 600;
+          color: #94a3b8;
+          background: rgba(255,255,255,0.04);
+          border: 1px solid rgba(255,255,255,0.09);
+          border-radius: 8px;
+          padding: 8px 14px;
+          cursor: pointer;
+          transition: all 0.15s;
+          margin-bottom: 14px;
+        }
+
+        .sm-upload-btn:hover {
+          background: rgba(0,223,129,0.08);
+          border-color: rgba(0,223,129,0.3);
+          color: #00df81;
+        }
+
+        /* Slider card */
+        .sm-slider-card {
+          background: rgba(0,0,0,0.35);
+          border: 1px solid rgba(255,255,255,0.07);
+          border-radius: 12px;
+          padding: 18px 20px;
+          margin-top: 16px;
+        }
+
+        .sm-slider-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 14px;
+        }
+
+        .sm-slider-title {
+          font-size: 13px;
+          font-weight: 600;
+          color: #f1f5f9;
+          margin-bottom: 2px;
+        }
+
+        .sm-slider-subtitle {
+          font-size: 11px;
+          color: #64748b;
+        }
+
+        .sm-slider-value {
+          font-family: 'JetBrains Mono', monospace;
+          font-size: 12px;
+          font-weight: 700;
+          color: #00df81;
+          background: rgba(0,223,129,0.1);
+          border: 1px solid rgba(0,223,129,0.25);
+          padding: 3px 10px;
+          border-radius: 6px;
+          letter-spacing: 0.04em;
+        }
+
+        /* Close button */
+        .sm-close-btn {
+          position: absolute;
+          top: 24px;
+          right: 28px;
+          z-index: 20;
+          width: 32px;
+          height: 32px;
+          border-radius: 8px;
+          background: rgba(255,255,255,0.04);
+          border: 1px solid rgba(255,255,255,0.08);
+          color: #64748b;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          transition: all 0.15s;
+        }
+
+        .sm-close-btn:hover {
+          background: rgba(244,63,94,0.12);
+          border-color: rgba(244,63,94,0.3);
+          color: #f43f5e;
+        }
+
+        /* Profile section inputs */
+        .sm-input {
+          width: 100%;
+          background: rgba(0,0,0,0.4);
+          border: 1px solid rgba(255,255,255,0.1);
+          border-radius: 8px;
+          padding: 9px 12px;
+          font-family: 'Space Grotesk', sans-serif;
+          font-size: 13px;
+          color: #f1f5f9;
+          outline: none;
+          transition: border-color 0.15s;
+        }
+
+        .sm-input:focus {
+          border-color: rgba(0,223,129,0.4);
+          box-shadow: 0 0 0 3px rgba(0,223,129,0.08);
+        }
+
+        .sm-input-label {
+          font-family: 'JetBrains Mono', monospace;
+          font-size: 9.5px;
+          font-weight: 700;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: #475569;
+          margin-bottom: 6px;
+          display: block;
+        }
+
+        .sm-save-btn {
+          padding: 8px 16px;
+          background: #00df81;
+          color: #000;
+          font-family: 'Space Grotesk', sans-serif;
+          font-size: 12px;
+          font-weight: 700;
+          border: none;
+          border-radius: 7px;
+          cursor: pointer;
+          transition: all 0.15s;
+          white-space: nowrap;
+        }
+
+        .sm-save-btn:hover {
+          background: #00f590;
+          box-shadow: 0 0 16px rgba(0,223,129,0.4);
+        }
+
+        .sm-cancel-btn {
+          padding: 8px 16px;
+          background: rgba(255,255,255,0.05);
+          color: #94a3b8;
+          font-family: 'Space Grotesk', sans-serif;
+          font-size: 12px;
+          font-weight: 600;
+          border: 1px solid rgba(255,255,255,0.09);
+          border-radius: 7px;
+          cursor: pointer;
+          transition: all 0.15s;
+        }
+
+        .sm-cancel-btn:hover {
+          background: rgba(255,255,255,0.09);
+          color: #f1f5f9;
+        }
+
+        .sm-edit-btn {
+          padding: 8px 14px;
+          background: rgba(0,223,129,0.08);
+          color: #00df81;
+          font-family: 'JetBrains Mono', monospace;
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          border: 1px solid rgba(0,223,129,0.25);
+          border-radius: 7px;
+          cursor: pointer;
+          transition: all 0.15s;
+          white-space: nowrap;
+        }
+
+        .sm-edit-btn:hover {
+          background: rgba(0,223,129,0.14);
+          box-shadow: 0 0 12px rgba(0,223,129,0.2);
+        }
+
+        .sm-handle-prefix {
+          display: flex;
+          align-items: center;
+        }
+
+        .sm-handle-at {
+          padding: 9px 12px;
+          background: rgba(0,0,0,0.4);
+          border: 1px solid rgba(255,255,255,0.1);
+          border-right: none;
+          border-radius: 8px 0 0 8px;
+          font-family: 'JetBrains Mono', monospace;
+          font-size: 13px;
+          color: #475569;
+        }
+
+        .sm-handle-input {
+          flex: 1;
+          background: rgba(0,0,0,0.4);
+          border: 1px solid rgba(255,255,255,0.1);
+          border-radius: 0 8px 8px 0;
+          padding: 9px 12px;
+          font-family: 'Space Grotesk', sans-serif;
+          font-size: 13px;
+          color: #f1f5f9;
+          outline: none;
+          transition: border-color 0.15s;
+        }
+
+        .sm-handle-input:focus {
+          border-color: rgba(0,223,129,0.4);
+        }
+
+        .sm-meta-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 8px 0;
+          border-bottom: 1px solid rgba(255,255,255,0.04);
+        }
+
+        .sm-meta-row:last-child {
+          border-bottom: none;
+        }
+
+        .sm-meta-key {
+          font-family: 'JetBrains Mono', monospace;
+          font-size: 10.5px;
+          color: #475569;
+        }
+
+        .sm-meta-val {
+          font-family: 'JetBrains Mono', monospace;
+          font-size: 10.5px;
+          color: #94a3b8;
+        }
+
+        .sm-preview-label {
+          font-family: 'JetBrains Mono', monospace;
+          font-size: 9px;
+          font-weight: 700;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: #475569;
+          margin-bottom: 14px;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+
+        .sm-preview-dot {
+          width: 5px;
+          height: 5px;
+          border-radius: 50%;
+          background: #00df81;
+          box-shadow: 0 0 6px #00df81;
+          animation: sm-pulse 2s infinite;
+        }
+
+        @keyframes sm-pulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.5; transform: scale(1.3); }
+        }
+
+        .sm-upload-icon-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          font-family: 'JetBrains Mono', monospace;
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 0.06em;
+          text-transform: uppercase;
+          color: #00df81;
+          background: rgba(0,223,129,0.08);
+          border: 1px solid rgba(0,223,129,0.2);
+          border-radius: 7px;
+          padding: 6px 12px;
+          cursor: pointer;
+          transition: all 0.15s;
+        }
+
+        .sm-upload-icon-btn:hover {
+          background: rgba(0,223,129,0.14);
+          box-shadow: 0 0 12px rgba(0,223,129,0.2);
+        }
+      `}</style>
+
+      <motion.div
+        className="sm-root"
+        initial={{ opacity: 0, scale: 0.96, y: 10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.96, y: 10 }}
+        transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Sidebar */}
+        <div className="sm-sidebar">
+          <div className="sm-logo-wrap">
+            <Image
+              src="/Logo/new_logo_wide.png"
+              alt="PrismSpace"
+              width={130}
+              height={31}
+              priority
+              className="h-[25px] w-auto object-contain drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)]"
+            />
+            <span className="sm-logo-version">v2.0</span>
           </div>
+
+          <div className="sm-nav-section-label">System Config</div>
+          <nav>
+            {navItems.map(item => {
+              const isActive = activeSection === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setActiveSection(item.id)}
+                  className={`sm-nav-btn${isActive ? ' active' : ''}`}
+                >
+                  {isActive && (
+                    <motion.div
+                      layoutId="activeSettingsNavPill"
+                      className="sm-nav-pill"
+                      transition={{
+                        type: 'spring',
+                        stiffness: 500,
+                        damping: 38,
+                      }}
+                    />
+                  )}
+                  <span className="sm-nav-icon">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                      {item.id === 'clock' && <><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></>}
+                      {item.id === 'themes' && <><circle cx="12" cy="12" r="10" /><path d="M12 2a10 10 0 0 1 0 20" /><path d="M2 12h10" /></>}
+                      {item.id === 'stats' && <><line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" /></>}
+                      {item.id === 'quotes' && <><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></>}
+                      {item.id === 'extras' && <><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></>}
+                      {item.id === 'profile' && <><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></>}
+                    </svg>
+                  </span>
+                  <span className="sm-nav-label">{item.label}</span>
+                  {isActive && <span className="sm-nav-indicator" />}
+                </button>
+              );
+            })}
+          </nav>
         </div>
 
         {/* Content */}
-        <div className="flex-1 p-8 overflow-y-auto relative">
-          <button
-            onClick={onClose}
-            className="absolute top-6 right-6 w-10 h-10 rounded-lg bg-white/10 
-                       hover:bg-white/20 flex items-center justify-center text-2xl transition-all"
-          >
-            ×
+        <div className="sm-content" ref={contentRef}>
+          <button onClick={onClose} className="sm-close-btn" title="Close settings">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
           </button>
+
+          <motion.div
+            key={activeSection}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+            style={{ minHeight: '100%', willChange: 'opacity, transform' }}
+          >
 
           {/* Clock Section */}
           {activeSection === 'clock' && (
-            <div className="space-y-8">
-              <div>
-                <h2 className="text-2xl font-semibold mb-6">Clock Format</h2>
-                <div className="flex gap-4">
-                  <button
-                    onClick={() => handleFormatChange('12')}
-                    className={`flex-1 p-6 rounded-xl border-2 transition-all ${
-                      clockFormat === '12'
-                        ? 'border-pink-500 bg-pink-500/10'
-                        : 'border-white/20 hover:border-white/40'
-                    }`}
-                  >
-                    <div className="text-4xl font-semibold mb-2">2:24</div>
-                    <div>12-hour</div>
+            <div style={{ paddingRight: 80 }}>
+              <div className="sm-section-kicker">
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
+                Clock
+              </div>
+              <h2 className="sm-section-title">Clock Settings</h2>
+              <p className="sm-section-desc">Customize how time is displayed on your dashboard</p>
+
+              {/* Format */}
+              <div className="sm-panel" style={{ marginBottom: 20 }}>
+                <div className="sm-panel-title">Time Format</div>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button onClick={() => handleFormatChange('12')} className={`sm-format-card${clockFormat === '12' ? ' selected' : ''}`}>
+                    {clockFormat === '12' && <span className="sm-format-check"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg></span>}
+                    <div className="sm-format-time">2:24</div>
+                    <div className="sm-format-label">12-hour</div>
                   </button>
-                  <button
-                    onClick={() => handleFormatChange('24')}
-                    className={`flex-1 p-6 rounded-xl border-2 transition-all ${
-                      clockFormat === '24'
-                        ? 'border-pink-500 bg-pink-500/10'
-                        : 'border-white/20 hover:border-white/40'
-                    }`}
-                  >
-                    <div className="text-4xl font-semibold mb-2">14:24</div>
-                    <div>24-hour</div>
+                  <button onClick={() => handleFormatChange('24')} className={`sm-format-card${clockFormat === '24' ? ' selected' : ''}`}>
+                    {clockFormat === '24' && <span className="sm-format-check"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg></span>}
+                    <div className="sm-format-time">14:24</div>
+                    <div className="sm-format-label">24-hour</div>
                   </button>
                 </div>
               </div>
 
-              <div>
-                <h2 className="text-2xl font-semibold mb-6">Clock Color</h2>
-                <div className="space-y-4">
-                  <div className="flex items-center gap-4">
-                    <input
-                      type="color"
-                      value={clockColor}
-                      onChange={(e) => handleColorChange(e.target.value)}
-                      className="w-20 h-12 rounded-lg cursor-pointer"
-                    />
-                    <input
-                      type="text"
-                      value={clockColor}
-                      onChange={(e) => handleColorChange(e.target.value)}
-                      className="flex-1 px-4 py-2 bg-white/10 rounded-lg border border-white/20 text-white"
-                      maxLength={7}
-                      placeholder="#ffffff"
-                    />
-                    <button
-                      onClick={() => handleColorChange('#ffffff')}
-                      className="px-4 py-2 bg-white/10 rounded-lg hover:bg-white/20 transition-all"
-                    >
-                      Reset
-                    </button>
-                  </div>
-
-                  {colorHistory.length > 0 && (
-                    <div>
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="text-sm text-white/60">Recent Colors:</span>
-                        <button
-                          onClick={clearColorHistory}
-                          className="text-xs text-white/60 hover:text-white transition-all"
-                        >
-                          Clear History
-                        </button>
-                      </div>
-                      <div className="flex gap-2 flex-wrap">
-                        {colorHistory.map((color, i) => (
-                          <button
-                            key={i}
-                            onClick={() => handleColorChange(color)}
-                            className="w-10 h-10 rounded-lg border-2 border-white/20 hover:border-white/40 transition-all"
-                            style={{ backgroundColor: color }}
-                            title={color}
-                          />
-                        ))}
-                      </div>
+              {/* Color */}
+              <div className="sm-panel" style={{ marginBottom: 20 }}>
+                <div className="sm-panel-title">Clock Color</div>
+                <div className="sm-color-input-wrap" style={{ marginBottom: 12 }}>
+                  <input type="color" value={clockColor} onChange={(e) => handleColorChange(e.target.value)} className="sm-color-swatch" style={{ backgroundColor: clockColor }} />
+                  <input type="text" value={clockColor} onChange={(e) => handleColorChange(e.target.value)} className="sm-color-text-input" maxLength={7} placeholder="#ffffff" />
+                  <CosmicButton as="button" onClick={() => handleColorChange('#ffffff')} className="h-7 text-[11px] px-2.5 shrink-0">Reset</CosmicButton>
+                </div>
+                {colorHistory.length > 0 && (
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <span style={{ fontFamily: 'JetBrains Mono', fontSize: 9.5, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: '#475569' }}>Recent Colors</span>
+                      <button onClick={clearColorHistory} style={{ fontFamily: 'JetBrains Mono', fontSize: 9, color: '#475569', background: 'none', border: 'none', cursor: 'pointer', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Clear</button>
                     </div>
-                  )}
-                </div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      {colorHistory.map((color, i) => (
+                        <button key={i} onClick={() => handleColorChange(color)} className="sm-history-swatch" style={{ backgroundColor: color }} title={color} />
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
-              <div>
-                <h2 className="text-2xl font-semibold mb-6">Clock Style</h2>
-                <p className="text-white/60 text-sm mb-8">
-                  Choose the perfect typography to match your vibe
-                </p>
-                <div className="grid grid-cols-3 gap-5">
+              {/* Clock Style */}
+              <div className="sm-panel">
+                <div className="sm-panel-title">Clock Typography</div>
+                <div className="sm-clock-grid">
                   {clockStyles.map((style) => {
                     const isSelected = clockStyle === style.value;
                     return (
                       <button
                         key={style.value}
                         onClick={() => handleStyleChange(style.value)}
-                        className={`group relative overflow-hidden rounded-2xl transition-all duration-300 ${
-                          isSelected
-                            ? 'ring-2 ring-pink-500 ring-offset-2 ring-offset-black/50 shadow-[0_0_40px_rgba(236,72,153,0.3)]'
-                            : 'ring-1 ring-white/10 hover:ring-white/30 hover:shadow-[0_8px_32px_rgba(255,255,255,0.08)]'
-                        }`}
-                        style={{ aspectRatio: '16/11' }}
+                        className={`sm-clock-card${isSelected ? ' selected' : ''}`}
                       >
-                        {/* Background gradient overlay */}
-                        <div className={`absolute inset-0 bg-gradient-to-br transition-opacity duration-300 ${
-                          isSelected
-                            ? 'from-pink-500/20 via-purple-500/10 to-transparent opacity-100'
-                            : 'from-white/5 to-transparent opacity-0 group-hover:opacity-100'
-                        }`} />
-                        
-                        {/* Clock preview component */}
-                        <div className="relative h-full w-full overflow-hidden">
-                          <div className={`absolute inset-0 w-full h-full transition-all duration-300 pointer-events-none ${isSelected ? 'scale-110 brightness-110' : 'scale-100'}`}>
-                            <ClockPreview style={style.value} color={clockColor} />
+                        <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+                          <ClockPreview style={style.value} color={clockColor} />
+                        </div>
+                        {isSelected && (
+                          <div className="sm-clock-card-check">
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg>
                           </div>
-                          
-                          {/* Gloss effect */}
-                          <div className={`absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-transparent opacity-0 
-                                         group-hover:opacity-100 transition-opacity duration-300 pointer-events-none ${
-                            isSelected ? 'opacity-40' : ''
-                          }`} />
-                        </div>
-
-                        {/* Label with backdrop */}
-                        <div className={`absolute bottom-0 left-0 right-0 p-3.5 backdrop-blur-xl transition-all duration-300 ${
-                          isSelected
-                            ? 'bg-gradient-to-t from-pink-500/30 via-pink-500/20 to-transparent'
-                            : 'bg-gradient-to-t from-black/60 via-black/40 to-transparent group-hover:from-black/70'
-                        }`}>
-                          <div className={`text-sm font-medium transition-all duration-300 ${
-                            isSelected 
-                              ? 'text-white' 
-                              : 'text-white/80 group-hover:text-white'
-                          }`}>
-                            {style.name}
-                          </div>
-                          
-                          {/* Selection indicator */}
-                          {isSelected && (
-                            <div className="absolute top-3 right-3 w-6 h-6 rounded-full bg-pink-500 
-                                          flex items-center justify-center animate-in zoom-in-0 duration-200">
-                              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                              </svg>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Hover shine effect */}
-                        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none">
-                          <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-transparent 
-                                        translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000" />
-                        </div>
+                        )}
+                        <div className="sm-clock-card-label">{style.name}</div>
                       </button>
                     );
                   })}
@@ -559,146 +1416,82 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 
           {/* Themes Section */}
           {activeSection === 'themes' && (
-            <div className="space-y-8">
-              <div>
-                <h2 className="text-2xl font-semibold mb-6">Themes</h2>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="p-6 rounded-xl border-2 border-pink-500 bg-pink-500/10">
-                    <div className="text-5xl font-semibold mb-2">12:34</div>
-                    <div>Home</div>
-                  </div>
-                  <div className="p-6 rounded-xl border-2 border-white/20 hover:border-white/40 transition-all cursor-pointer">
-                    <div className="text-4xl font-semibold mb-2">⏱️ 25:00</div>
-                    <div>Focus</div>
-                  </div>
-                </div>
+            <div style={{ paddingRight: 80 }}>
+              <div className="sm-section-kicker">
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10" /><path d="M12 2a10 10 0 0 1 0 20" /><path d="M2 12h10" /></svg>
+                Themes
               </div>
+              <h2 className="sm-section-title">Appearance</h2>
+              <p className="sm-section-desc">Wallpapers, transparency, and DevTools overlay settings</p>
 
-              <div>
-                <h2 className="text-2xl font-semibold mb-6">Background</h2>
-                <div className="mb-4">
-                  <input
-                    type="file"
-                    accept="image/*,image/gif,video/mp4,video/webm,video/ogg"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                    id="wallpaperUpload"
-                  />
-                  <label
-                    htmlFor="wallpaperUpload"
-                    className="inline-block px-6 py-3 bg-white/10 rounded-lg hover:bg-white/20 transition-all cursor-pointer"
-                  >
-                    Upload GIF or Video Wallpaper
-                  </label>
-                </div>
-                <div className="grid grid-cols-4 gap-4">
+              {/* Upload */}
+              <div className="sm-panel" style={{ marginBottom: 20 }}>
+                <div className="sm-panel-title">Wallpaper Source</div>
+                <input type="file" accept="image/*,image/gif,video/mp4,video/webm,video/ogg" onChange={handleFileUpload} className="hidden" id="wallpaperUpload" />
+                <label htmlFor="wallpaperUpload" className="sm-upload-btn">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
+                  Upload GIF / Video / Image
+                </label>
+
+                <div className="sm-bg-grid">
                   {customPreviewUrl && (
-                    <button
-                      onClick={handleCustomBackgroundSelect}
-                      className={`group relative aspect-video rounded-xl overflow-hidden border-2 transition-all ${
-                        selectedBg === 'custom'
-                          ? 'border-[#00df81] shadow-[0_0_15px_rgba(0,223,129,0.4)]'
-                          : 'border-white/20 hover:border-white/40'
-                      }`}
-                      title="Custom wallpaper"
-                    >
+                    <button onClick={handleCustomBackgroundSelect} className={`sm-bg-thumb${selectedBg === 'custom' ? ' selected' : ''}`} title="Custom wallpaper">
                       {customMediaType === 'video' ? (
-                         <video
-                           src={customPreviewUrl}
-                           autoPlay
-                           muted
-                           loop
-                           playsInline
-                           className="w-full h-full object-cover"
-                         />
+                        <video src={customPreviewUrl} autoPlay muted loop playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                       ) : (
-                         <img
-                           src={customPreviewUrl}
-                           alt="Custom wallpaper"
-                           className="w-full h-full object-cover"
-                         />
+                        <Image
+                          src={customPreviewUrl}
+                          alt="Custom wallpaper"
+                          width={160}
+                          height={90}
+                          unoptimized
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
                       )}
-                      <span className="absolute left-2 top-2 rounded bg-black/60 px-2 py-1 text-[11px] font-medium text-white">
-                        Custom
-                      </span>
+                      <span className="sm-bg-custom-label">Custom</span>
                     </button>
                   )}
                   {backgrounds.map((bg, i) => (
-                    <button
-                      key={i}
-                      onClick={() => handleBackgroundChange(bg.path)}
-                      className={`aspect-video rounded-xl overflow-hidden border-2 transition-all ${
-                        selectedBg === bg.path
-                          ? 'border-[#00df81] shadow-[0_0_15px_rgba(0,223,129,0.4)]'
-                          : 'border-white/20 hover:border-white/40'
-                      }`}
-                      title={bg.name}
-                    >
+                    <button key={i} onClick={() => handleBackgroundChange(bg.path)} className={`sm-bg-thumb${selectedBg === bg.path ? ' selected' : ''}`} title={bg.name}>
                       {bg.mediaType === 'video' ? (
-                        <video
-                          src={bg.path}
-                          muted
-                          loop
-                          playsInline
-                          className="w-full h-full object-cover"
-                        />
+                        <video src={bg.path} muted loop playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                       ) : (
-                        <img
+                        <Image
                           src={bg.path}
                           alt={bg.name}
-                          className="w-full h-full object-cover"
+                          width={160}
+                          height={90}
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                         />
                       )}
                     </button>
                   ))}
                 </div>
+              </div>
 
-                {/* Wallpaper Opacity / Exposure Slider */}
-                <div className="mt-8 p-6 bg-white/5 rounded-2xl border border-white/10">
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <h3 className="text-base font-semibold text-white">Wallpaper Transparency / Exposure</h3>
-                      <p className="text-xs text-white/60">Drag ticker to adjust background transparency live</p>
-                    </div>
-                    <span className="text-sm font-mono font-semibold px-3 py-1 bg-black/40 border border-[#00df81]/40 rounded-lg text-[#00df81]">
-                      {wallpaperOpacity}%
-                    </span>
-                  </div>
-                  <div className="flex justify-center py-2 overflow-x-hidden">
-                    <ExposureSlider
-                      min={0}
-                      max={100}
-                      step={5}
-                      value={wallpaperOpacity}
-                      onChange={handleWallpaperOpacityChange}
-                      accentColor="#ec4899"
-                      showIndicator={true}
-                    />
+              {/* Wallpaper opacity */}
+              <div className="sm-slider-card">
+                <div className="sm-slider-header">
+                  <div>
+                    <div className="sm-slider-title">Wallpaper Transparency</div>
+                    <div className="sm-slider-subtitle">Adjust background opacity live</div>
                   </div>
                 </div>
+                <div style={{ display: 'flex', justifyContent: 'center', overflow: 'hidden' }}>
+                  <ExposureSlider min={0} max={100} step={5} value={wallpaperOpacity} onChange={handleWallpaperOpacityChange} accentColor="#00df81" showIndicator={true} />
+                </div>
+              </div>
 
-                {/* DevTools Opacity / Exposure Slider */}
-                <div className="mt-4 p-6 bg-white/5 rounded-2xl border border-white/10">
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <h3 className="text-base font-semibold text-white">DevTools Transparency / Exposure</h3>
-                      <p className="text-xs text-white/60">Drag ticker to adjust DevTools panel transparency live</p>
-                    </div>
-                    <span className="text-sm font-mono font-semibold px-3 py-1 bg-white/10 rounded-lg text-emerald-400">
-                      {devtoolsOpacity}%
-                    </span>
+              {/* DevTools opacity */}
+              <div className="sm-slider-card">
+                <div className="sm-slider-header">
+                  <div>
+                    <div className="sm-slider-title">DevTools Transparency</div>
+                    <div className="sm-slider-subtitle">Adjust DevTools panel opacity live</div>
                   </div>
-                  <div className="flex justify-center py-2 overflow-x-hidden">
-                    <ExposureSlider
-                      min={10}
-                      max={100}
-                      step={5}
-                      value={devtoolsOpacity}
-                      onChange={handleDevtoolsOpacityChange}
-                      accentColor="#10b981"
-                      showIndicator={true}
-                    />
-                  </div>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'center', overflow: 'hidden' }}>
+                  <ExposureSlider min={10} max={100} step={5} value={devtoolsOpacity} onChange={handleDevtoolsOpacityChange} accentColor="#00df81" showIndicator={true} />
                 </div>
               </div>
             </div>
@@ -706,41 +1499,29 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 
           {/* Quotes Section */}
           {activeSection === 'quotes' && (
-            <div className="space-y-6">
-              <h2 className="text-2xl font-semibold mb-6">Quotes & Greetings</h2>
-              
-              <div className="space-y-4">
-                <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl">
+            <div style={{ paddingRight: 80 }}>
+              <div className="sm-section-kicker">
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
+                Quotes
+              </div>
+              <h2 className="sm-section-title">Greetings & Quotes</h2>
+              <p className="sm-section-desc">Control how the dashboard greets you each session</p>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div className="sm-toggle-row">
                   <div>
-                    <div className="font-medium mb-1">Show dynamic greetings</div>
-                    <div className="text-sm text-white/60">Turn off for generic greetings.</div>
+                    <div className="sm-toggle-label">Dynamic greetings</div>
+                    <div className="sm-toggle-desc">Context-aware greetings based on time of day</div>
                   </div>
-                  <AppleSwitch
-                    checked={dynamicGreetings}
-                    onCheckedChange={(checked) => {
-                      setDynamicGreetings(checked);
-                      localStorage.setItem('dynamicGreetings', checked.toString());
-                    }}
-                    size="sm"
-                    aria-label="Show dynamic greetings"
-                  />
+                  <AppleSwitch checked={dynamicGreetings} onCheckedChange={(checked) => { setDynamicGreetings(checked); localStorage.setItem('dynamicGreetings', checked.toString()); }} size="sm" aria-label="Show dynamic greetings" />
                 </div>
 
-                <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl">
+                <div className="sm-toggle-row">
                   <div>
-                    <div className="font-medium mb-1">Show greetings</div>
-                    <div className="text-sm text-white/60">Turn off to hide dashboard greetings.</div>
+                    <div className="sm-toggle-label">Show greetings</div>
+                    <div className="sm-toggle-desc">Display the greeting block on the dashboard</div>
                   </div>
-                  <AppleSwitch
-                    checked={showGreetings}
-                    onCheckedChange={(checked) => {
-                      setShowGreetings(checked);
-                      localStorage.setItem('showGreetings', checked.toString());
-                      window.location.reload();
-                    }}
-                    size="sm"
-                    aria-label="Show greetings"
-                  />
+                  <AppleSwitch checked={showGreetings} onCheckedChange={(checked) => { setShowGreetings(checked); localStorage.setItem('showGreetings', checked.toString()); window.location.reload(); }} size="sm" aria-label="Show greetings" />
                 </div>
               </div>
             </div>
@@ -748,163 +1529,103 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 
           {/* Extras Section */}
           {activeSection === 'extras' && (
-            <div className="space-y-6">
-              <h2 className="text-2xl font-semibold mb-6">Extras</h2>
-              
-              <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl">
-                <div>
-                  <div className="font-medium mb-1">Custom Cursor</div>
-                  <div className="text-sm text-white/60">Show the animated smooth cursor instead of the system pointer.</div>
-                </div>
-                <AppleSwitch
-                  checked={customCursor}
-                  onCheckedChange={(checked) => {
-                    setCustomCursor(checked);
-                    localStorage.setItem('customCursor', checked.toString());
-                    window.dispatchEvent(new CustomEvent('prism:cursor-settings'));
-                  }}
-                  size="sm"
-                  aria-label="Custom Cursor"
-                />
+            <div style={{ paddingRight: 80 }}>
+              <div className="sm-section-kicker">
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>
+                Extras
               </div>
+              <h2 className="sm-section-title">System Extras</h2>
+              <p className="sm-section-desc">Fine-tune Dynamic Island and OS-level behaviour</p>
 
-              <div>
-                <h3 className="text-base font-semibold mb-4 text-white/70 uppercase tracking-widest text-xs">Dynamic Island</h3>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl">
+              <div className="sm-panel">
+                <div className="sm-panel-title">Dynamic Island</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div className="sm-toggle-row">
                     <div>
-                      <div className="font-medium mb-1">Enable Dynamic Island</div>
-                      <div className="text-sm text-white/60">Show the floating time pill at the top of the screen.</div>
+                      <div className="sm-toggle-label">Enable Dynamic Island</div>
+                      <div className="sm-toggle-desc">Floating time pill at the top of the screen</div>
                     </div>
-                    <AppleSwitch
-                      checked={dynamicIsland}
-                      onCheckedChange={(checked) => {
-                        setDynamicIsland(checked);
-                        localStorage.setItem('dynamicIsland', checked.toString());
-                        window.dispatchEvent(new CustomEvent('prism:island-settings'));
-                      }}
-                      size="sm"
-                      aria-label="Enable Dynamic Island"
-                    />
+                    <AppleSwitch checked={dynamicIsland} onCheckedChange={(checked) => { setDynamicIsland(checked); localStorage.setItem('dynamicIsland', checked.toString()); window.dispatchEvent(new CustomEvent('prism:island-settings')); }} size="sm" aria-label="Enable Dynamic Island" />
                   </div>
-
-                  <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl">
+                  <div className="sm-toggle-row">
                     <div>
-                      <div className="font-medium mb-1">Show seconds</div>
-                      <div className="text-sm text-white/60">Display seconds in the collapsed time pill.</div>
+                      <div className="sm-toggle-label">Show seconds</div>
+                      <div className="sm-toggle-desc">Display seconds in the collapsed pill</div>
                     </div>
-                    <AppleSwitch
-                      checked={dynamicIslandSeconds}
-                      onCheckedChange={(checked) => {
-                        setDynamicIslandSeconds(checked);
-                        localStorage.setItem('dynamicIslandSeconds', checked.toString());
-                        window.dispatchEvent(new CustomEvent('prism:island-settings'));
-                      }}
-                      size="sm"
-                      aria-label="Show seconds in Dynamic Island"
-                    />
+                    <AppleSwitch checked={dynamicIslandSeconds} onCheckedChange={(checked) => { setDynamicIslandSeconds(checked); localStorage.setItem('dynamicIslandSeconds', checked.toString()); window.dispatchEvent(new CustomEvent('prism:island-settings')); }} size="sm" aria-label="Show seconds in Dynamic Island" />
                   </div>
-
-                  <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl">
+                  <div className="sm-toggle-row">
                     <div>
-                      <div className="font-medium mb-1">Auto-expand on events</div>
-                      <div className="text-sm text-white/60">Expand the island when app notifications arrive.</div>
+                      <div className="sm-toggle-label">Auto-expand on events</div>
+                      <div className="sm-toggle-desc">Expand when app notifications arrive</div>
                     </div>
-                    <AppleSwitch
-                      checked={dynamicIslandExpand}
-                      onCheckedChange={(checked) => {
-                        setDynamicIslandExpand(checked);
-                        localStorage.setItem('dynamicIslandExpand', checked.toString());
-                        window.dispatchEvent(new CustomEvent('prism:island-settings'));
-                      }}
-                      size="sm"
-                      aria-label="Auto-expand Dynamic Island on events"
-                    />
+                    <AppleSwitch checked={dynamicIslandExpand} onCheckedChange={(checked) => { setDynamicIslandExpand(checked); localStorage.setItem('dynamicIslandExpand', checked.toString()); window.dispatchEvent(new CustomEvent('prism:island-settings')); }} size="sm" aria-label="Auto-expand Dynamic Island on events" />
                   </div>
                 </div>
               </div>
             </div>
           )}
 
-          {/* Placeholder Sections */}
+          {/* Stats Section */}
           {activeSection === 'stats' && (
-            <div>
-              <h2 className="text-2xl font-semibold mb-6">
-                {navItems.find(i => i.id === activeSection)?.label}
-              </h2>
-              <p className="text-white/60">Settings for this section coming soon...</p>
+            <div style={{ paddingRight: 80 }}>
+              <div className="sm-section-kicker">
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" /></svg>
+                Stats
+              </div>
+              <h2 className="sm-section-title">Statistics</h2>
+              <p className="sm-section-desc">Telemetry and usage analytics — coming soon</p>
+              <div className="sm-panel" style={{ display: 'flex', alignItems: 'center', gap: 14, opacity: 0.5 }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#00df81" strokeWidth="1.5"><line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" /></svg>
+                <span style={{ fontFamily: 'JetBrains Mono', fontSize: 12, color: '#64748b' }}>{'// Dashboard telemetry panel — under construction'}</span>
+              </div>
             </div>
           )}
 
           {/* Profile Section */}
           {activeSection === 'profile' && (
-            <div className="space-y-6">
-              <h2 className="text-2xl font-semibold mb-6">Profile</h2>
+            <div>
+              <div className="sm-section-kicker">
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
+                Profile
+              </div>
+              <h2 className="sm-section-title">User Profile</h2>
+              <p className="sm-section-desc" style={{ marginBottom: 20 }}>Manage your identity across PrismSpace OS</p>
 
-              <div className="grid grid-cols-[1fr_320px] gap-6 items-start">
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 420px', gap: 24, alignItems: 'start' }}>
                 {/* LEFT: editor */}
-                <div className="space-y-5">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
 
                   {/* Avatar */}
-                  <div className="bg-white/5 rounded-xl p-5">
-                    <h3 className="text-base font-semibold mb-4">Avatar</h3>
-                    <div className="flex items-center gap-5">
+                  <div className="sm-panel">
+                    <div className="sm-panel-title">Avatar</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                       <AvatarPicker
                         currentAvatar={avatar}
                         onAvatarChange={async (newAvatar) => {
                           setAvatar(newAvatar);
                           setCardAvatarUrl('');
-                          await db.user_profile.update('current', {
-                            avatar: newAvatar,
-                            updatedAt: new Date(),
-                          });
+                          await db.user_profile.update('current', { avatar: newAvatar, updatedAt: new Date() });
                         }}
                       />
-                      <div className="flex-1">
-                        <p className="text-sm text-white/60 mb-2">Choose an emoji or upload a photo</p>
-                        <label
-                          htmlFor="profile-card-img-upload"
-                          className="inline-flex items-center gap-2 cursor-pointer px-3 py-1.5 rounded-lg text-xs font-medium"
-                          style={{
-                            background: 'rgba(255,255,255,0.07)',
-                            border: '1px solid rgba(255,255,255,0.12)',
-                            color: 'rgba(255,255,255,0.7)',
-                          }}
-                        >
-                          📷 Upload image
-                          <input
-                            id="profile-card-img-upload"
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (!file) return;
-                              const reader = new FileReader();
-                              reader.onload = (ev) => {
-                                const url = ev.target?.result as string;
-                                setCardAvatarUrl(url);
-                              };
-                              reader.readAsDataURL(file);
-                            }}
-                          />
+                      <div style={{ flex: 1 }}>
+                        <p style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>Choose an emoji or upload a photo</p>
+                        <label htmlFor="profile-card-img-upload" className="sm-upload-icon-btn">
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>
+                          Upload image
+                          <input id="profile-card-img-upload" type="file" accept="image/*" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = (ev) => { setCardAvatarUrl(ev.target?.result as string); }; reader.readAsDataURL(file); }} />
                         </label>
                         {cardAvatarUrl && (
-                          <button
-                            onClick={() => setCardAvatarUrl('')}
-                            className="ml-2 text-xs text-white/40 hover:text-white/70 transition-colors"
-                          >
-                            ✕ Remove photo
-                          </button>
+                          <button onClick={() => setCardAvatarUrl('')} style={{ marginLeft: 8, fontFamily: 'JetBrains Mono', fontSize: 10, color: '#475569', background: 'none', border: 'none', cursor: 'pointer' }}>✕ Remove</button>
                         )}
                       </div>
                     </div>
                   </div>
 
                   {/* Display Name */}
-                  <div className="bg-white/5 rounded-xl p-5">
-                    <h3 className="text-base font-semibold mb-4">Display Name</h3>
-                    <div className="flex items-center gap-3">
+                  <div className="sm-panel">
+                    <div className="sm-panel-title">Display Name</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       {isEditingUsername ? (
                         <>
                           <input
@@ -914,145 +1635,260 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                             onKeyDown={async (e) => {
                               if (e.key === 'Enter') {
                                 const trimmed = tempUsername.trim();
-                                if (trimmed) {
-                                  setUsername(trimmed);
-                                  await db.user_profile.update('current', {
-                                    username: trimmed,
-                                    updatedAt: new Date(),
-                                  });
-                                  setIsEditingUsername(false);
-                                }
-                              } else if (e.key === 'Escape') {
-                                setIsEditingUsername(false);
-                              }
+                                if (trimmed) { setUsername(trimmed); await db.user_profile.update('current', { username: trimmed, updatedAt: new Date() }); setIsEditingUsername(false); }
+                              } else if (e.key === 'Escape') { setIsEditingUsername(false); }
                             }}
-                            className="flex-1 px-4 py-2 bg-[#0f141b] border border-[#283341] rounded text-white text-sm focus:outline-none focus:border-purple-500/50"
+                            className="sm-input"
+                            style={{ flex: 1 }}
                             placeholder="Enter display name"
                             autoFocus
                           />
-                          <button
-                            onClick={async () => {
-                              const trimmed = tempUsername.trim();
-                              if (trimmed) {
-                                setUsername(trimmed);
-                                await db.user_profile.update('current', {
-                                  username: trimmed,
-                                  updatedAt: new Date(),
-                                });
-                                setIsEditingUsername(false);
-                              }
-                            }}
-                            className="px-4 py-2 bg-purple-500/90 hover:bg-purple-500 text-white font-medium rounded transition-colors text-sm"
-                          >
-                            Save
-                          </button>
-                          <button
-                            onClick={() => setIsEditingUsername(false)}
-                            className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white font-medium rounded transition-colors text-sm"
-                          >
-                            Cancel
-                          </button>
+                          <CosmicButton as="button" onClick={async () => { const t = tempUsername.trim(); if (t) { setUsername(t); await db.user_profile.update('current', { username: t, updatedAt: new Date() }); setIsEditingUsername(false); } }} className="h-8 text-xs px-3">Save</CosmicButton>
+                          <button onClick={() => setIsEditingUsername(false)} className="sm-cancel-btn">Cancel</button>
                         </>
                       ) : (
                         <>
-                          <div className="flex-1 px-4 py-2 bg-[#0f141b] border border-[#283341] rounded text-white text-sm">
-                            {username}
-                          </div>
-                          <button
-                            onClick={() => {
-                              setTempUsername(username);
-                              setIsEditingUsername(true);
-                            }}
-                            className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white font-medium rounded transition-colors text-sm"
-                          >
-                            Edit
-                          </button>
+                          <div className="sm-input" style={{ flex: 1, cursor: 'default' }}>{username}</div>
+                          <CosmicButton as="button" onClick={() => { setTempUsername(username); setIsEditingUsername(true); }} className="h-8 text-xs px-3">Edit</CosmicButton>
                         </>
                       )}
                     </div>
-                    <p className="text-xs text-white/40 mt-2">Appears on your profile card and dashboard greeting</p>
+                    <p style={{ fontFamily: 'JetBrains Mono', fontSize: 10, color: '#475569', marginTop: 8 }}>Appears on your profile card and dashboard greeting</p>
                   </div>
 
                   {/* Handle & Title */}
-                  <div className="bg-white/5 rounded-xl p-5 space-y-4">
-                    <h3 className="text-base font-semibold">Card Details</h3>
-                    <div>
-                      <label className="block text-xs text-white/50 mb-1.5 font-medium">@Handle</label>
-                      <div className="flex items-center">
-                        <span className="px-3 py-2 bg-white/5 border border-r-0 border-white/10 rounded-l text-white/40 text-sm">@</span>
+                  <div className="sm-panel">
+                    <div className="sm-panel-title">Card Details</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      <div>
+                        <label className="sm-input-label">@Handle</label>
+                        <div className="sm-handle-prefix">
+                          <span className="sm-handle-at">@</span>
+                          <input type="text" value={cardHandle} placeholder={username.toLowerCase().replace(/\s+/g, '')} onChange={(e) => setCardHandle(e.target.value.replace(/\s+/g, '').toLowerCase())} className="sm-handle-input" />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="sm-input-label">Title / Role</label>
                         <input
                           type="text"
-                          value={cardHandle}
-                          placeholder={username.toLowerCase().replace(/\s+/g, '')}
-                          onChange={(e) => setCardHandle(e.target.value.replace(/\s+/g, '').toLowerCase())}
-                          className="flex-1 px-3 py-2 bg-[#0f141b] border border-white/10 rounded-r text-white text-sm focus:outline-none focus:border-purple-500/50"
+                          value={cardTitle}
+                          onChange={(e) => {
+                            setCardTitle(e.target.value);
+                            localStorage.setItem('profile_card_title', e.target.value);
+                          }}
+                          className="sm-input"
+                          placeholder="e.g. Software Engineer"
+                        />
+                      </div>
+                      <div>
+                        <label className="sm-input-label">Tagline</label>
+                        <input
+                          type="text"
+                          value={cardTagline}
+                          onChange={(e) => {
+                            setCardTagline(e.target.value);
+                            localStorage.setItem('profile_card_tagline', e.target.value);
+                          }}
+                          className="sm-input"
+                          placeholder="e.g. You code it. Now orchestrate."
                         />
                       </div>
                     </div>
-                    <div>
-                      <label className="block text-xs text-white/50 mb-1.5 font-medium">Title / Role</label>
+                  </div>
+
+                  {/* Profile Tags & Skills */}
+                  <div className="sm-panel">
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <div className="sm-panel-title" style={{ margin: 0 }}>Profile Tags & Skills</div>
+                      <span style={{ fontFamily: 'JetBrains Mono', fontSize: 11, color: '#00df81', background: 'rgba(0,223,129,0.1)', padding: '2px 8px', borderRadius: 12, border: '1px solid rgba(0,223,129,0.25)' }}>
+                        {cardTags.length} / 8 tags
+                      </span>
+                    </div>
+                    <p style={{ fontFamily: 'JetBrains Mono', fontSize: 11, color: '#64748b', marginBottom: 12 }}>
+                      Skills, technologies, and specializations printed directly onto your 3D badge.
+                    </p>
+
+                    {/* Active tags */}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12, minHeight: 32 }}>
+                      {cardTags.map((tag) => (
+                        <span
+                          key={tag}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            background: 'rgba(255, 255, 255, 0.05)',
+                            border: '1px solid rgba(0, 223, 129, 0.35)',
+                            padding: '4px 10px',
+                            borderRadius: 8,
+                            fontSize: 12,
+                            fontFamily: 'JetBrains Mono',
+                            color: '#e2e8f0',
+                          }}
+                        >
+                          <span style={{ color: '#00df81', fontWeight: 600 }}>#</span>
+                          {tag}
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveTag(tag)}
+                            title={`Remove ${tag}`}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              color: '#94a3b8',
+                              cursor: 'pointer',
+                              padding: '0 2px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: 14,
+                              lineHeight: 1,
+                              borderRadius: 4,
+                            }}
+                            onMouseEnter={(e) => (e.currentTarget.style.color = '#ef4444')}
+                            onMouseLeave={(e) => (e.currentTarget.style.color = '#94a3b8')}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                      {cardTags.length === 0 && (
+                        <span style={{ fontSize: 12, color: '#64748b', fontStyle: 'italic', padding: '4px 0' }}>
+                          No tags added yet. Add some below!
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Add Tag Input */}
+                    <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
                       <input
                         type="text"
-                        value={cardTitle}
-                        onChange={(e) => setCardTitle(e.target.value)}
-                        className="w-full px-3 py-2 bg-[#0f141b] border border-white/10 rounded text-white text-sm focus:outline-none focus:border-purple-500/50"
-                        placeholder="e.g. Software Engineer"
+                        value={newTagInput}
+                        onChange={(e) => setNewTagInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleAddTag(newTagInput);
+                          }
+                        }}
+                        placeholder="Add a tag (e.g. Rust, UI/UX, WebGL)..."
+                        className="sm-input"
+                        style={{ flex: 1, fontSize: 12 }}
+                        maxLength={20}
                       />
+                      <CosmicButton
+                        as="button"
+                        onClick={() => handleAddTag(newTagInput)}
+                        disabled={!newTagInput.trim() || cardTags.length >= 8}
+                        className="h-8 text-xs px-3"
+                      >
+                        + Add
+                      </CosmicButton>
+                    </div>
+
+                    {/* Quick suggestion pills */}
+                    <div>
+                      <div style={{ fontFamily: 'JetBrains Mono', fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+                        Suggestions:
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                        {['React', 'Next.js', 'TypeScript', 'AI/ML', 'Full-stack', 'Python', 'Cybersecurity', 'Rust', 'UI/UX', 'Cloud'].map((suggestion) => {
+                          const isAlreadyAdded = cardTags.some((t) => t.toLowerCase() === suggestion.toLowerCase());
+                          if (isAlreadyAdded) return null;
+                          return (
+                            <button
+                              key={suggestion}
+                              type="button"
+                              onClick={() => handleAddTag(suggestion)}
+                              style={{
+                                background: 'rgba(255, 255, 255, 0.03)',
+                                border: '1px dashed rgba(255, 255, 255, 0.15)',
+                                color: '#94a3b8',
+                                padding: '3px 8px',
+                                borderRadius: 6,
+                                fontSize: 11,
+                                fontFamily: 'JetBrains Mono',
+                                cursor: 'pointer',
+                                transition: 'all 0.15s ease',
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.borderColor = 'rgba(0, 223, 129, 0.5)';
+                                e.currentTarget.style.color = '#00df81';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.15)';
+                                e.currentTarget.style.color = '#94a3b8';
+                              }}
+                            >
+                              + {suggestion}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
 
                   {/* Account info */}
-                  <div className="bg-white/5 rounded-xl p-5">
-                    <h3 className="text-base font-semibold mb-3">Account</h3>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-white/60">Profile created</span>
-                        <span className="text-white">{new Date().toLocaleDateString()}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-white/60">Last updated</span>
-                        <span className="text-white">{new Date().toLocaleDateString()}</span>
-                      </div>
+                  <div className="sm-panel">
+                    <div className="sm-panel-title">Account Metadata</div>
+                    <div className="sm-meta-row">
+                      <span className="sm-meta-key">Profile created</span>
+                      <span className="sm-meta-val">{new Date().toLocaleDateString()}</span>
+                    </div>
+                    <div className="sm-meta-row">
+                      <span className="sm-meta-key">Last updated</span>
+                      <span className="sm-meta-val">{new Date().toLocaleDateString()}</span>
                     </div>
                   </div>
                 </div>
 
-                {/* RIGHT: live card preview */}
-                <div className="sticky top-0">
-                  <p className="text-xs text-white/40 uppercase tracking-widest font-semibold mb-4">Live Preview</p>
+                {/* RIGHT: live 3D Lanyard card preview */}
+                <div style={{ position: 'sticky', top: 0, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  <div className="sm-preview-label" style={{ alignSelf: 'flex-start', marginBottom: 8 }}>
+                    <span className="sm-preview-dot" />
+                    Live 3D ID Badge
+                  </div>
                   <div
                     style={{
-                      display: 'flex',
-                      justifyContent: 'center',
-                      transform: 'scale(0.78)',
-                      transformOrigin: 'top center',
+                      width: '100%',
+                      maxWidth: 420,
+                      height: 640,
+                      borderRadius: 20,
+                      border: '1px solid rgba(255, 255, 255, 0.08)',
+                      background: 'radial-gradient(ellipse at 50% 12%, rgba(0, 223, 129, 0.06) 0%, rgba(7, 11, 17, 0.95) 75%)',
+                      position: 'relative',
+                      overflow: 'hidden',
+                      boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.08)',
                     }}
                   >
-                    <ProfileCard
-                      name={username}
-                      handle={cardHandle || username.toLowerCase().replace(/\s+/g, '')}
-                      title={cardTitle}
-                      status="Online"
-                      avatarUrl={
-                        cardAvatarUrl ||
-                        (avatar.startsWith('data:image') || avatar.startsWith('http')
-                          ? avatar
-                          : `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>${avatar}</text></svg>`)
-                      }
-                      innerGradient="linear-gradient(145deg,#60496e8c 0%,#71C4FF44 100%)"
-                      behindGlowColor="rgba(125, 190, 255, 0.67)"
-                      behindGlowSize="50%"
-                      miniAvatarUrl={cardAvatarUrl || undefined}
-                      contactText="Message"
-                      onContactClick={() => {}}
+                    <Lanyard
+                      frontImage={lanyardFrontImage}
+                      transparent={true}
+                      position={[0, -1.45, 12.2]}
+                      cardScale={3.3}
+                      lanyardWidth={1.3}
                     />
+                  </div>
+                  <div
+                    style={{
+                      marginTop: 10,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      fontFamily: 'JetBrains Mono',
+                      fontSize: 11,
+                      color: '#64748b',
+                    }}
+                  >
+                    <span style={{ color: '#00df81' }}>●</span> Click &amp; drag badge to swing physics
                   </div>
                 </div>
               </div>
             </div>
           )}
+          </motion.div>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }

@@ -164,13 +164,20 @@ If you need environment variables:
 1. Create `.env.local` (not committed to git):
    ```env
    NEXT_PUBLIC_API_URL=your-api-url
+   NEXT_PUBLIC_SITE_URL=https://prismspace.app
    ```
+
+   `NEXT_PUBLIC_SITE_URL` must be the canonical HTTPS origin without a path. It is used to
+   generate canonical metadata, Open Graph URLs, `robots.txt`, and `sitemap.xml`.
 
 2. Add to your deployment platform:
    - **Vercel:** Project Settings > Environment Variables
    - **Netlify:** Site Settings > Environment Variables
    - **Railway:** Variables tab
    - **AWS/DigitalOcean:** Environment section in console
+
+Before the first production deploy, verify that `NEXT_PUBLIC_SITE_URL` is set to
+`https://prismspace.app` (or the approved canonical domain) for the production environment.
 
 ## Custom Domain
 

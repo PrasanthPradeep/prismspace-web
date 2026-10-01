@@ -1,0 +1,70 @@
+{
+  "figma": {
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-figma"],
+    "description": "Inspect Figma design files, components, styles, design tokens, and export vector/raster assets.",
+    "env": {
+      "FIGMA_API_TOKEN": "${FIGMA_API_TOKEN}"
+    }
+  },
+  "google_drive": {
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-gdrive"],
+    "description": "Search, read, create, and manage Google Docs, Sheets, Slides, and Drive folder structures.",
+    "env": {
+      "GOOGLE_DRIVE_CREDENTIALS": "${GOOGLE_DRIVE_CREDENTIALS}"
+    }
+  },
+  "gmail": {
+    "transport": "stdio",
+    "command": "python",
+    "args": ["google_oauth.py"],
+    "description": "Read, draft, search, and send emails, process incoming notifications, and manage threads via Google OAuth.",
+    "env": {
+      "GMAIL_CLIENT_SECRET": "${GMAIL_CLIENT_SECRET}"
+    }
+  },
+  "github": {
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-github"],
+    "description": "Access repositories, code trees, pull requests, issues, commits, branches, and code reviews.",
+    "env": {
+      "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_PERSONAL_ACCESS_TOKEN}"
+    }
+  },
+  "filesystem": {
+    "transport": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-filesystem", "."],
+    "description": "Local sandboxed workspace filesystem access: search, read, write, edit, and inspect directory trees.",
+    "env": {
+      "ALLOWED_DIRECTORIES": "${ALLOWED_DIRECTORIES}"
+    }
+  },
+  "terminal": {
+    "transport": "in-process",
+    "command": "internal",
+    "args": [],
+    "description": "Run approved shell commands in the local workspace for search, builds, scripts, and file operations.",
+    "env": {}
+  },
+  "sqlite": {
+    "transport": "in-process",
+    "command": "internal",
+    "args": [],
+    "description": "Structured local relational storage for persistence, telemetry, and fast queryable tables.",
+    "env": {
+      "SQLITE_DB_PATH": "${SQLITE_DB_PATH}"
+    }
+  },
+  "memory": {
+    "transport": "in-process",
+    "command": "internal",
+    "args": [],
+    "description": "Cross-session key-value memory store for persisting facts, user preferences, and intermediate results.",
+    "env": {}
+  }
+}

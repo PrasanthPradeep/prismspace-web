@@ -1,4 +1,8 @@
 /**
+ * Copyright 2026 Nobin Sijo (NobinSijo7T).
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/**
  * app/api/agent-swarm/agents/[id]/logs/route.ts
  * GET /api/agent-swarm/agents/:id/logs
  *

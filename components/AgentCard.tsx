@@ -1,9 +1,14 @@
+/**
+ * Copyright 2026 Nobin Sijo (NobinSijo7T).
+ * SPDX-License-Identifier: Apache-2.0
+ */
 'use client';
 
 /**
  * components/AgentCard.tsx
  * ────────────────────────
  * A compact card that displays one Hive agent's status, controls, and metadata.
+ * Styled with PrismSpace High-Voltage design system.
  */
 
 import { useState } from 'react';
@@ -19,6 +24,7 @@ import {
 
 import { AgentOrb } from '@/components/AgentOrb';
 import ShaderRevealTransition from '@/components/ui/smoothui/shader-reveal-transition';
+import { StatefulButton } from '@/components/ui/stateful-button';
 
 interface AgentCardProps {
   agent: SwarmAgent;
@@ -40,7 +46,7 @@ const STATUS_ICONS: Record<AgentStatus, string> = {
 function StatusPulse({ status }: { status: AgentStatus }) {
   const isActive = ['initialising', 'planning', 'running'].includes(status);
   const isPaused = status === 'awaiting_approval';
-  const color = STATUS_COLORS[status];
+  const color = STATUS_COLORS[status] || '#00df81';
 
   return (
     <span
@@ -48,9 +54,9 @@ function StatusPulse({ status }: { status: AgentStatus }) {
       style={{
         backgroundColor: color,
         boxShadow: isActive
-          ? `0 0 6px ${color}`
-          : isPaused
           ? `0 0 8px ${color}`
+          : isPaused
+          ? `0 0 10px ${color}`
           : 'none',
         animation: isActive
           ? 'pulse 1.2s ease-in-out infinite'
@@ -98,11 +104,10 @@ export function AgentCard({ agent, isSelected, onSelect, onRefresh }: AgentCardP
       ? `${Math.floor(elapsed / 60)}m ago`
       : `${Math.floor(elapsed / 3600)}h ago`;
 
-  const statusColor = STATUS_COLORS[agent.status];
-  const statusLabel = STATUS_LABELS[agent.status];
-  const statusIcon = STATUS_ICONS[agent.status];
+  const statusColor = STATUS_COLORS[agent.status] || '#00df81';
+  const statusLabel = STATUS_LABELS[agent.status] || agent.status;
+  const statusIcon = STATUS_ICONS[agent.status] || '•';
   const terminal = isTerminal(agent.status);
-
   const isRunning = ['initialising', 'planning', 'running'].includes(agent.status);
 
   return (
@@ -114,44 +119,23 @@ export function AgentCard({ agent, isSelected, onSelect, onRefresh }: AgentCardP
     >
       <div
         onClick={onSelect}
-        className="agent-card"
+        className={`layer-row relative cursor-pointer overflow-hidden transition-all duration-200 ${
+          isSelected ? 'highlighted' : ''
+        }`}
         style={{
-          background: isSelected
-            ? 'rgba(0,255,136,0.05)'
-            : 'rgba(255,255,255,0.03)',
-          border: isSelected
-            ? `1px solid ${statusColor}55`
-            : '1px solid rgba(255,255,255,0.08)',
-          borderRadius: '12px',
-          padding: '14px 16px',
-          cursor: 'pointer',
-          transition: 'all 0.2s ease',
-          position: 'relative',
-          overflow: 'hidden',
+          borderLeft: isSelected ? `3px solid ${statusColor}` : undefined,
+          background: isSelected ? 'var(--prism-card-active)' : 'var(--prism-card)',
+          borderColor: isSelected ? 'var(--prism-border-active)' : 'var(--prism-border-card)',
+          boxShadow: isSelected ? '0 0 20px rgba(0, 223, 129, 0.12), inset 0 0 12px rgba(0, 223, 129, 0.04)' : undefined,
         }}
       >
-        {/* Glow accent when selected */}
-        {isSelected && (
-          <div
-            style={{
-              position: 'absolute',
-              left: 0,
-              top: 0,
-              bottom: 0,
-              width: '3px',
-              background: statusColor,
-              borderRadius: '12px 0 0 12px',
-            }}
-          />
-        )}
-
         {/* Header row */}
         <div className="flex items-start justify-between gap-3 mb-2">
           <div className="flex items-center gap-2.5 min-w-0 flex-1">
             <AgentOrb provider={agent.provider} seed={agent.id} size="28px" className="flex-shrink-0" />
             <div className="min-w-0 flex-1">
               <p
-                className="text-white text-sm font-medium truncate"
+                className="text-white text-sm font-medium truncate font-sans"
                 title={agent.objective}
               >
                 {agent.objective}
@@ -168,7 +152,7 @@ export function AgentCard({ agent, isSelected, onSelect, onRefresh }: AgentCardP
               onClick={handleDelete}
               disabled={deleting}
               title="Remove agent"
-              className="text-white/30 hover:text-red-400 transition-colors text-sm flex-shrink-0"
+              className="text-white/30 hover:text-red-400 active:scale-75 transition-all text-xs p-1 flex-shrink-0 rounded hover:bg-white/5"
             >
               {deleting ? '…' : '✕'}
             </button>
@@ -176,49 +160,63 @@ export function AgentCard({ agent, isSelected, onSelect, onRefresh }: AgentCardP
         </div>
 
         {/* Status row */}
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 pt-1">
           <StatusPulse status={agent.status} />
-          <span className="text-xs font-mono" style={{ color: statusColor }}>
+          <span
+            className="text-[11px] font-mono font-medium"
+            style={{ color: statusColor }}
+          >
             {statusIcon} {statusLabel}
           </span>
-          <span className="text-white/25 text-xs ml-auto font-mono">
+          <span className="text-white/30 text-[11px] ml-auto font-mono">
             {agent.provider}/{agent.model}
           </span>
         </div>
 
         {/* HITL approval buttons */}
         {agent.status === 'awaiting_approval' && (
-          <div className="flex gap-2 mt-3">
-            <button
+          <>
+            {agent.pending_approval && (
+              <div className="mt-3 rounded-md px-2 py-1 text-[10px] font-mono text-amber-200" style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)' }}>
+                Approval required: {agent.pending_approval.tool}
+              </div>
+            )}
+            <div className="flex gap-2 mt-2 pt-2" style={{ borderTop: '1px solid var(--prism-border-card)' }}>
+              <StatefulButton
               onClick={(e) => handleApprove(true, e)}
+              loading={approving}
               disabled={approving}
-              className="flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all"
+              className="flex-1 py-1.5 rounded-lg text-[11px] font-mono font-bold tracking-wider uppercase transition-all"
               style={{
-                background: 'rgba(74,222,128,0.15)',
-                border: '1px solid rgba(74,222,128,0.4)',
-                color: '#4ade80',
+                background: 'rgba(0, 223, 129, 0.15)',
+                border: '1px solid rgba(0, 223, 129, 0.4)',
+                color: 'var(--prism-primary)',
               }}
             >
-              {approving ? '…' : '✓ Approve'}
-            </button>
-            <button
+              ✓ Approve
+              </StatefulButton>
+              <StatefulButton
               onClick={(e) => handleApprove(false, e)}
+              loading={approving}
               disabled={approving}
-              className="flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all"
+              className="flex-1 py-1.5 rounded-lg text-[11px] font-mono font-bold tracking-wider uppercase transition-all"
               style={{
-                background: 'rgba(248,113,113,0.15)',
-                border: '1px solid rgba(248,113,113,0.4)',
-                color: '#f87171',
+                background: 'rgba(248, 113, 113, 0.12)',
+                border: '1px solid rgba(248, 113, 113, 0.35)',
+                color: '#fca5a5',
               }}
             >
-              {approving ? '…' : '✕ Reject'}
-            </button>
-          </div>
+              ✕ Reject
+              </StatefulButton>
+            </div>
+          </>
         )}
 
         {/* Result preview */}
         {agent.result && terminal && (
-          <p className="text-white/50 text-xs mt-2 truncate">{agent.result}</p>
+          <p className="text-white/50 text-xs mt-2 truncate font-mono bg-black/20 px-2 py-1 rounded">
+            {agent.result}
+          </p>
         )}
       </div>
     </ShaderRevealTransition>

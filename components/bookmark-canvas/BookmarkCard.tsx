@@ -1,3 +1,7 @@
+/**
+ * Copyright 2026 Nobin Sijo (NobinSijo7T).
+ * SPDX-License-Identifier: Apache-2.0
+ */
 'use client';
 
 import { memo, useCallback, useState } from 'react';
@@ -9,6 +13,8 @@ import {
   ExternalLink,
   MoreHorizontal,
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import Image from 'next/image';
 import type { Bookmark } from '@/lib/bookmark-canvas/types';
 import {
   MIN_CARD_WIDTH,
@@ -23,6 +29,8 @@ interface BookmarkCardProps {
   bookmark: Bookmark;
   isSelected: boolean;
   scale: number;
+  isLocked?: boolean;
+  isPanMode?: boolean;
   onSelect: (id: number) => void;
   onDoubleClick: (bookmark: Bookmark) => void;
   onDragStop: (id: number, x: number, y: number) => void;
@@ -36,6 +44,8 @@ export const BookmarkCard = memo(function BookmarkCard({
   bookmark,
   isSelected,
   scale,
+  isLocked = false,
+  isPanMode = false,
   onSelect,
   onDoubleClick,
   onDragStop,
@@ -89,10 +99,12 @@ export const BookmarkCard = memo(function BookmarkCard({
       dragGrid={[GRID_SNAP, GRID_SNAP]}
       resizeGrid={[GRID_SNAP, GRID_SNAP]}
       scale={scale}
-      enableResizing
+      enableResizing={!isLocked && !isPanMode}
+      disableDragging={isLocked || isPanMode}
       bounds="parent"
       style={{
         zIndex: bookmark.pinned ? 20 : isSelected ? 15 : 10,
+        pointerEvents: isPanMode ? 'none' : 'auto',
       }}
       onDragStart={() => {
         setIsDragging(true);
@@ -126,17 +138,25 @@ export const BookmarkCard = memo(function BookmarkCard({
         onMouseLeave={() => setIsHovered(false)}
       >
         <div
-          className="w-full h-full flex flex-col overflow-hidden cursor-grab active:cursor-grabbing"
+          className={cn(
+            "w-full h-full flex flex-col overflow-hidden",
+            isPanMode
+              ? "cursor-grab"
+              : isLocked
+              ? "cursor-pointer"
+              : "cursor-grab active:cursor-grabbing"
+          )}
           style={{
-            background: bookmark.color,
+            background: '#090c12',
             borderRadius: '12px',
+            border: isSelected ? '2px solid #00df81' : '1px solid rgba(255, 255, 255, 0.08)',
             boxShadow: isSelected
-              ? `0 0 0 2px oklch(0.65 0.25 270), 0 12px 40px oklch(0 0 0 / 40%)`
+              ? `0 0 20px rgba(0, 223, 129, 0.25), 0 12px 40px rgba(0, 0, 0, 0.4)`
               : isHovered
-              ? `0 8px 30px oklch(0 0 0 / 35%)`
-              : `0 4px 16px oklch(0 0 0 / 28%)`,
-            transition: 'box-shadow 0.2s ease',
-            color: textColor,
+              ? `0 8px 30px rgba(0, 0, 0, 0.35)`
+              : `0 4px 16px rgba(0, 0, 0, 0.28)`,
+            transition: 'box-shadow 0.2s ease, border-color 0.2s ease',
+            color: '#ffffff',
           }}
           onClick={handleClick}
           onDoubleClick={handleDoubleClick}
@@ -146,31 +166,52 @@ export const BookmarkCard = memo(function BookmarkCard({
           <div
             className="flex items-start gap-2 px-3 pt-3 pb-2"
             style={{
-              borderBottom: `1px solid ${isLight ? 'rgba(26,26,46,0.1)' : 'rgba(255,255,255,0.15)'}`,
+              borderBottom: `1px solid rgba(255, 255, 255, 0.08)`,
             }}
           >
             {/* Favicon */}
-            <div className="shrink-0 w-6 h-6 rounded-md overflow-hidden mt-0.5 flex items-center justify-center"
-              style={{ background: isLight ? 'rgba(26,26,46,0.08)' : 'rgba(255,255,255,0.15)' }}>
+            <div 
+              className="shrink-0 w-6 h-6 rounded-md overflow-hidden mt-0.5 flex items-center justify-center"
+              style={{ 
+                background: bookmark.color || 'rgba(0, 223, 129, 0.12)',
+              }}
+            >
               {bookmark.favicon ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img
+                <Image
                   src={bookmark.favicon}
                   alt=""
+                  width={16}
+                  height={16}
+                  unoptimized
                   className="w-4 h-4 object-contain"
                   onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                 />
               ) : (
-                <ExternalLink size={10} style={{ color: textColor, opacity: 0.5 }} />
+                <ExternalLink size={10} style={{ color: '#ffffff', opacity: 0.5 }} />
               )}
             </div>
 
             {/* Title & domain */}
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold leading-tight truncate" style={{ color: textColor }}>
+              <p 
+                className="text-sm font-semibold leading-tight truncate" 
+                style={{ 
+                  color: '#ffffff',
+                  fontFamily: 'Space Grotesk, sans-serif',
+                  fontWeight: 700,
+                }}
+              >
                 {bookmark.title}
               </p>
-              <p className="text-xs opacity-60 truncate mt-0.5" style={{ color: textColor }}>
+              <p 
+                className="text-xs opacity-60 truncate mt-0.5" 
+                style={{ 
+                  color: '#cbd5e1',
+                  fontFamily: 'JetBrains Mono, monospace',
+                  fontSize: '10px',
+                }}
+              >
                 {domain}
               </p>
             </div>
@@ -178,33 +219,42 @@ export const BookmarkCard = memo(function BookmarkCard({
             {/* Action buttons */}
             <div className={`flex items-center gap-0.5 no-drag shrink-0 transition-opacity ${isHovered || isSelected ? 'opacity-100' : 'opacity-0'}`}>
               <button
-                className="p-1 rounded-md hover:bg-black/10 transition-colors"
+                className="p-1 rounded-md transition-colors"
+                style={{
+                  background: isHovered ? 'rgba(255, 255, 255, 0.08)' : 'transparent',
+                }}
                 onClick={(e) => { e.stopPropagation(); onToggleFavorite(id); }}
                 title="Toggle Favorite"
               >
                 <Star
                   size={12}
                   fill={bookmark.favorite ? 'currentColor' : 'none'}
-                  style={{ color: bookmark.favorite ? '#f59e0b' : textColor, opacity: bookmark.favorite ? 1 : 0.5 }}
+                  style={{ color: bookmark.favorite ? '#f59e0b' : '#cbd5e1', opacity: bookmark.favorite ? 1 : 0.6 }}
                 />
               </button>
               <button
-                className="p-1 rounded-md hover:bg-black/10 transition-colors"
+                className="p-1 rounded-md transition-colors"
+                style={{
+                  background: isHovered ? 'rgba(255, 255, 255, 0.08)' : 'transparent',
+                }}
                 onClick={(e) => { e.stopPropagation(); onTogglePin(id); }}
                 title="Toggle Pin"
               >
                 <Pin
                   size={12}
                   fill={bookmark.pinned ? 'currentColor' : 'none'}
-                  style={{ color: bookmark.pinned ? '#8b5cf6' : textColor, opacity: bookmark.pinned ? 1 : 0.5 }}
+                  style={{ color: bookmark.pinned ? '#00df81' : '#cbd5e1', opacity: bookmark.pinned ? 1 : 0.6 }}
                 />
               </button>
               <button
-                className="p-1 rounded-md hover:bg-black/10 transition-colors no-drag"
+                className="p-1 rounded-md transition-colors no-drag"
+                style={{
+                  background: isHovered ? 'rgba(255, 255, 255, 0.08)' : 'transparent',
+                }}
                 onClick={handleContextMenu}
                 title="More options"
               >
-                <MoreHorizontal size={12} style={{ color: textColor, opacity: 0.5 }} />
+                <MoreHorizontal size={12} style={{ color: '#cbd5e1', opacity: 0.6 }} />
               </button>
             </div>
           </div>
@@ -213,8 +263,14 @@ export const BookmarkCard = memo(function BookmarkCard({
           {bookmark.notes ? (
             <div className="flex-1 px-3 py-2 overflow-hidden">
               <p
-                className="text-xs leading-relaxed line-clamp-5 font-mono"
-                style={{ color: textColor, opacity: 0.75 }}
+                className="text-xs leading-relaxed line-clamp-5"
+                style={{ 
+                  color: '#cbd5e1', 
+                  opacity: 0.8,
+                  fontFamily: 'JetBrains Mono, monospace',
+                  fontSize: '11px',
+                  fontWeight: 500,
+                }}
               >
                 {bookmark.notes}
               </p>
@@ -227,7 +283,7 @@ export const BookmarkCard = memo(function BookmarkCard({
           <div
             className="flex items-center justify-between px-3 pb-2.5 pt-1.5 flex-shrink-0"
             style={{
-              borderTop: `1px solid ${isLight ? 'rgba(26,26,46,0.08)' : 'rgba(255,255,255,0.12)'}`,
+              borderTop: `1px solid rgba(255, 255, 255, 0.08)`,
             }}
           >
             {/* Category badge */}
@@ -235,8 +291,12 @@ export const BookmarkCard = memo(function BookmarkCard({
               <span
                 className="text-[10px] font-medium px-1.5 py-0.5 rounded-md"
                 style={{
-                  background: isLight ? 'rgba(26,26,46,0.1)' : 'rgba(255,255,255,0.2)',
-                  color: textColor,
+                  background: bookmark.color || 'rgba(0, 223, 129, 0.12)',
+                  color: '#ffffff',
+                  fontFamily: 'JetBrains Mono, monospace',
+                  fontWeight: 700,
+                  letterSpacing: '0.05em',
+                  textTransform: 'uppercase',
                 }}
               >
                 {bookmark.category}
@@ -248,7 +308,11 @@ export const BookmarkCard = memo(function BookmarkCard({
               {bookmark.visitCount > 0 && (
                 <span
                   className="text-[10px] opacity-55"
-                  style={{ color: textColor }}
+                  style={{ 
+                    color: '#94a3b8',
+                    fontFamily: 'JetBrains Mono, monospace',
+                    fontWeight: 600,
+                  }}
                   title={`Last visited: ${formatRelativeTime(bookmark.lastVisited)}`}
                 >
                   {bookmark.visitCount} visit{bookmark.visitCount !== 1 ? 's' : ''}
@@ -265,9 +329,12 @@ export const BookmarkCard = memo(function BookmarkCard({
                 animate={{ scale: 1 }}
                 exit={{ scale: 0 }}
                 className="absolute -top-2 -right-2 w-5 h-5 rounded-full flex items-center justify-center"
-                style={{ background: '#8b5cf6', boxShadow: '0 2px 8px rgba(139,92,246,0.5)' }}
+                style={{ 
+                  background: '#00df81', 
+                  boxShadow: '0 0 20px rgba(0, 223, 129, 0.5)',
+                }}
               >
-                <Pin size={9} fill="white" color="white" />
+                <Pin size={9} fill="#000000" color="#000000" />
               </motion.div>
             )}
           </AnimatePresence>

@@ -9,7 +9,7 @@ An AI-powered developer operating environment, browser dashboard, and multi-agen
 ![Tailwind](https://img.shields.io/badge/Tailwind-3.4-38bdf8)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
 ![PyTorch](https://img.shields.io/badge/PyTorch-CUDA%2012.6-orange)
-![License](https://img.shields.io/badge/License-ISC-green)
+![License](https://img.shields.io/badge/License-Apache--2.0-green)
 
 ---
 
@@ -24,11 +24,12 @@ An AI-powered developer operating environment, browser dashboard, and multi-agen
 - [Dataset Directory Structure & Ingestion](#-dataset-directory-structure--ingestion)
 - [Quick Start: Run, Train & Test](#-quick-start-run-train--test)
   - [Prerequisites](#prerequisites)
-  - [1. Frontend & Backend Quick Start](#1-frontend--backend-quick-start)
+  - [1. Frontend & Backend Quick Start (Unified Runners)](#1-frontend--backend-quick-start-unified-runners)
   - [2. Machine Learning Environment Setup](#2-machine-learning-environment-setup)
   - [3. Training Commands](#3-training-commands)
   - [4. Model Testing & Inference Commands](#4-model-testing--inference-commands)
   - [5. Evaluation Commands](#5-evaluation-commands)
+- [Agent OS Tooling](#-agent-os-tooling)
 - [Core Features](#-core-features)
 - [Project Directory Layout](#-project-directory-layout)
 - [Documentation & References](#-documentation--references)
@@ -148,7 +149,7 @@ PrismSpace trains its ML subsystem across the following benchmarks and preferenc
 
 ## 📁 Dataset Directory Structure & Ingestion
 
-All training records are ingested by `model/dataset_loader.py` and curated by `model/prepare_supervised_datasets.py`. Place dataset files in subfolders under `model/datasets/`:
+Training records are ingested from `model/datasets/training/`; held-out test data lives in `model/datasets/testing/`, and validation benchmarks live in `model/datasets/validation/`. The loader and curation flow are implemented by `model/dataset_loader.py` and `model/prepare_supervised_datasets.py`.
 
 ```
 prismspace-web/
@@ -187,25 +188,115 @@ prismspace-web/
 
 ### Prerequisites
 - **Node.js**: 18.0+ & `npm` / `pnpm`
-- **Python**: 3.10+
+- **Python**: 3.11+
 - **NVIDIA GPU** (Optional): CUDA 12.6+ recommended for transformer fine-tuning and PyTorch acceleration.
 
 ---
 
-### 1. Frontend & Backend Quick Start
+### 1. Frontend & Backend Quick Start (Unified Runners)
 
+PrismSpace includes automated, colorful cross-platform runner scripts in [`run/`](run/) that perform pre-flight system diagnostics, provision virtual environments, check port availability, and launch both the **Next.js Frontend** and the **FastAPI Swarm Backend** concurrently with clean `Ctrl+C` multi-process shutdown.
+
+#### 🪟 Windows (PowerShell - Recommended)
 ```powershell
-# 1. Install frontend dependencies
-npm install
+# Run both Frontend & Backend concurrently:
+.\run\run.ps1
 
-# 2. Launch the Next.js Dev Server (runs on http://localhost:3000)
-npm run dev
-
-# 3. In a separate terminal, launch the Hive API Backend (runs on http://localhost:8000)
-.\backend\start.ps1
+# Or run individual services:
+.\run\run.ps1 -Service Frontend   # Next.js only (http://localhost:3000)
+.\run\run.ps1 -Service Backend    # FastAPI Swarm only (http://localhost:7433)
 ```
 
-*(On Linux / macOS, start the backend with: `uvicorn backend.app:app --host 0.0.0.0 --port 8000 --reload`)*
+#### 🖱️ Windows (Double-Click or Command Prompt)
+```cmd
+# Double-click or run from cmd:
+run\run.bat
+```
+
+#### 🐧 Linux / macOS / WSL / Git Bash
+```bash
+# Make executable and run both services:
+chmod +x run/*.sh
+./run/run.sh
+
+# Or run individual services:
+./run/run.sh --frontend           # Next.js only
+./run/run.sh --backend            # FastAPI Swarm only
+```
+
+#### 🌐 Service Port & Endpoints Map
+
+| Service | Address | Description |
+|---|---|---|
+| **Frontend Web** | [`http://localhost:3000`](http://localhost:3000) | Next.js 14 Developer OS & UI |
+| **Agent Swarm Dashboard** | [`http://localhost:3000/swarm`](http://localhost:3000/swarm) | Interactive Swarm Orchestration & Worker Mesh |
+| **Swarm Backend API** | [`http://localhost:7433`](http://localhost:7433) | FastAPI Multi-Agent Bridge & ML Intelligence |
+| **Interactive OpenAPI Docs** | [`http://localhost:7433/docs`](http://localhost:7433/docs) | Swagger UI for backend endpoints |
+| **Swarm Health Proxy Route** | [`http://localhost:3000/api/agent-swarm/health`](http://localhost:3000/api/agent-swarm/health) | Health status bridge |
+
+*(See [`run/README.md`](run/README.md) for full CLI flags, advanced options, and technical details.)*
+
+---
+
+## 🖥️ Agent OS Tooling
+
+The Hive backend gives agents structured access to the local workspace and operating system. Agents use filesystem tools for files and directories, and the built-in Terminal/OS tool layer for commands and host operations.
+
+### Filesystem and Terminal Tools
+
+- Search filenames and file contents
+- Read, write, edit, create, delete, copy, and move files
+- Inspect directory trees and file metadata
+- Run PowerShell on Windows and the native shell on Linux/macOS
+- Execute builds, tests, scripts, Git commands, and repository utilities
+- Stream command output through the live agent log panel
+
+### Native File Transfers
+
+Copy and move operations use platform-native tools for high throughput:
+
+| Platform | Preferred utility | Behavior |
+|---|---|---|
+| Windows | `robocopy` | Uses `/J`, retries, ETA output, and move flags where appropriate |
+| Linux/macOS | `rsync` | Uses archive mode and `--info=progress2` when available |
+| Any platform fallback | `cp` / Python copy routines | Used when the preferred utility is unavailable |
+
+Transfer progress, the selected utility, the executed command, completion state, and errors are visible in the Agent Swarm Pipeline and Logs views. Active native transfers can be cancelled from the UI.
+
+### Structured OS Operations
+
+The agent can call dedicated tools for:
+
+- Host information, CPU/load, memory, and disk usage
+- Process listing, status checks, stopping, and restarting
+- Windows services and Linux `systemd` services
+- Package-manager detection and package installation through `winget`, Chocolatey, Homebrew, `apt`, `dnf`, or `pacman`
+- Environment-variable inspection and mutation
+- ZIP/TAR archive creation and secure extraction
+- File permission inspection and updates
+- Windows Task Scheduler inspection and management
+- Scheduled-task listing on Linux/macOS
+- Ping and DNS diagnostics
+
+### Approval and Safety
+
+Risky operations pause the agent and appear as an approval request in the UI. This includes process and service changes, package installation, environment mutation, permission changes, scheduled-task changes, archive extraction, destructive filesystem operations, and destructive terminal commands. Structured OS file, archive, and transfer paths are restricted to the workspace; terminal working directories are workspace-bound, native operations have bounded timeouts, and archive extraction rejects path traversal.
+
+The backend endpoint for cancelling an active operation is:
+
+```text
+POST /api/agents/{agent_id}/cancel-operation
+```
+
+### OS Tool Smoke Tests
+
+```powershell
+# Validate Python modules
+python -m py_compile backend\hive_api.py backend\os_tools.py
+
+# Validate the production frontend build
+npm run build
+```
 
 ---
 
@@ -239,13 +330,13 @@ python -c "import torch; print('CUDA available:', torch.cuda.is_available()); pr
 #### A. Quick Smoke-Test Run (1,000 samples per source)
 Fast end-to-end dry run to verify dataset ingestion, feature engineering, and pipeline integrity:
 ```powershell
-python -m model.train --dataset-dir model\datasets --output-dir model\artifacts_test --max-rows-per-file 1000
+python -m model.train --dataset-dir model\datasets\training --output-dir model\artifacts_test --max-rows-per-file 1000
 ```
 
 #### B. Full Production Training Run
-Scans all datasets under `model/datasets/`, trains routing, planning, and safety models, and outputs `.joblib` model artifacts to `model/artifacts/`:
+Scans training datasets under `model/datasets/training/`, trains routing, planning, and safety models, and outputs `.joblib` model artifacts to `model/artifacts/`:
 ```powershell
-python -m model.train --dataset-dir model\datasets --output-dir model\artifacts --max-rows-per-file 50000
+python -m model.train --dataset-dir model\datasets\training --curated-dir model\datasets\training\curated --output-dir model\artifacts --max-rows-per-file 50000
 ```
 
 ---
@@ -288,6 +379,9 @@ This generates `evaluation_report.json` in the output artifacts directory detail
 - 🎨 **Glassmorphism UI** - Curated themes, live matrix display, custom wallpaper uploads.
 - 🛠️ **23 Developer Utilities** - JSON toolkit, Regex workbench, Crypto utils, SQL Playground (SQLite WASM), Markdown editor, Git reference.
 - 🤖 **Agent Swarm Visualizer** - Real-time visualization of multi-agent state machines, MCP server tools, and DAG execution pipelines.
+- 🖥️ **Agent OS Control Layer** - Structured filesystem, terminal, process, service, package, archive, permission, scheduler, resource, and network tools with approval gates.
+- ⚡ **Native Transfer Engine** - Robocopy on Windows and rsync on Linux/macOS with streamed progress and cancellation.
+- 🛡️ **Per-Operation Approval** - Risky agent actions pause for explicit operator approval before execution.
 - 📝 **Developer Productivity Suite** - Habit tracker, focus timer, checklist manager, decision analyzer.
 - 📊 **System & Telemetry Monitor** - Live tracking of browser environment, system resources, model latencies, and token budgets.
 
@@ -302,7 +396,8 @@ prismspace-web/
 │   ├── globals.css              # Global styles & design tokens
 │   └── page.tsx                 # Main developer dashboard entry point
 ├── backend/                     # Python Hive FastAPI Backend
-│   ├── app.py                   # FastAPI server & MCP router
+│   ├── hive_api.py              # FastAPI server, MCP router, and agent tool loop
+│   ├── os_tools.py              # Cross-platform structured operating-system tools
 │   ├── model_inference.py       # Inference endpoint integration
 │   ├── test_model_inference.py  # Model test suite
 │   └── start.ps1                # Backend startup script
@@ -329,6 +424,11 @@ prismspace-web/
 │   ├── predict.py               # Inference CLI entry point
 │   └── evaluate.py              # Model evaluation suite
 ├── public/                      # Static assets (fonts, images, wallpapers)
+├── run/                         # Cross-platform fullstack runners (.ps1, .sh, .bat)
+│   ├── run.ps1                  # PowerShell fullstack runner with cyber diagnostics
+│   ├── run.sh                   # Bash fullstack runner (Linux / macOS / WSL)
+│   ├── run.bat                  # Windows batch runner / double-click launcher
+│   └── README.md                # Runner documentation & flag reference
 ├── package.json                 # Node dependencies
 ├── tailwind.config.ts           # Tailwind CSS configuration
 └── tsconfig.json                # TypeScript configuration
@@ -338,6 +438,7 @@ prismspace-web/
 
 ## 📚 Documentation & References
 
+- **[run/README.md](run/README.md)** — Comprehensive runner guide, CLI options, and flag reference.
 - **[USAGE_GUIDE.md](USAGE_GUIDE.md)** — Step-by-step user guide for all 23 developer tools and clock settings.
 - **[FEATURES.md](FEATURES.md)** — Detailed specification of all 50+ built-in features.
 - **[MIGRATION_GUIDE.md](MIGRATION_GUIDE.md)** — Architectural design and customization manual.
@@ -354,4 +455,28 @@ prismspace-web/
 
 ## 📝 License
 
-This project is licensed under the **ISC License**.
+Copyright © 2026 Nobin Sijo ([NobinSijo7T](https://github.com/NobinSijo7T)). The original PrismSpace source code is licensed under the **Apache License 2.0**. See [LICENSE](LICENSE).
+
+The repository also contains or references third-party packages, fonts, images, datasets, model artifacts, and hosted AI services with separate terms. Those materials are not relicensed by this notice; see [NOTICE](NOTICE) and [LICENSE_AUDIT.md](LICENSE_AUDIT.md) before redistributing a source archive, container, or trained model.
+
+Dev Space collaboration is open for adding and improving developer tools under the contribution policy in [CONTRIBUTING.md](CONTRIBUTING.md). Core AI models, training data, model artifacts, routing, and safety behavior require prior maintainer authorization.
+
+### Contribution and collaboration mandate
+
+Collaborators have broad project-level access to propose and contribute to existing Dev Space tools, including:
+
+- `public/dev-space/`
+- `components/tools/`
+- `app/dev-space/`
+- supporting tool code in `components/`, `lib/`, and `hooks/`
+
+Contributors may add tools, improve UX, fix bugs, add tests, and improve documentation through normal review. Contributions must preserve third-party notices and disclose copied, generated, AI-assisted, or externally sourced material.
+
+The following areas are maintainer-controlled and require prior written authorization from Nobin Sijo before contribution, modification, retraining, replacement, or redistribution:
+
+- core AI/model architecture and training code under `model/`;
+- model weights, checkpoints, indexes, and serialized artifacts under `model/artifacts*/`;
+- training, validation, and test datasets under `model/datasets/`;
+- model-serving, routing, governance, and safety behavior, including related inference integration.
+
+This is a repository contribution and access policy documented in [CONTRIBUTING.md](CONTRIBUTING.md). It does not modify the standard Apache-2.0 license or grant rights to third-party models, datasets, assets, or services. See [NOTICE](NOTICE) and the [full licensing audit](LICENSE_AUDIT.md) before redistributing the project.

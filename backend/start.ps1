@@ -1,3 +1,5 @@
+# Copyright 2026 Nobin Sijo (NobinSijo7T).
+# SPDX-License-Identifier: Apache-2.0
 # Hive Backend Startup Script (PowerShell)
 # Run from the prismspace-web root:  .\backend\start.ps1
 

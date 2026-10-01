@@ -1,3 +1,7 @@
+/**
+ * Copyright 2026 Nobin Sijo (NobinSijo7T).
+ * SPDX-License-Identifier: Apache-2.0
+ */
 'use client';
 
 // Specific react-use hooks used (tree-shakeable named imports from package root)
@@ -95,7 +99,7 @@ export function SystemInfo() {
     <div className="fixed top-5 left-0 glass-dark rounded-r-2xl p-5 w-80 text-left z-[100] 
                     border-r-4 border-r-[#00ff88] text-white
                     -translate-x-[calc(100%-30px)] opacity-70
-                    transition-all duration-[400ms] ease-in-out
+                    transition-all duration-300 ease-in-out
                     hover:translate-x-0 hover:opacity-100">
       <h3 className="mt-0 mb-4 text-lg font-semibold text-center font-sans">
         💻 System Status

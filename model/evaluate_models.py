@@ -1,7 +1,9 @@
+# Copyright 2026 Nobin Sijo (NobinSijo7T).
+# SPDX-License-Identifier: Apache-2.0
 """Comprehensive CLI evaluation of all PrismSpace trained model artifacts.
 
 Run with:
-    python -m model.evaluate_models --artifacts-dir model/artifacts --curated-dir model/datasets/curated
+    python -m model.evaluate_models --artifacts-dir model/artifacts --curated-dir model/datasets/testing/curated
 
 Features:
     • Auto-discovers every .joblib model, ORPO adapter, FAISS index, and workflow template
@@ -900,7 +902,7 @@ def main() -> None:
         epilog="""\
 Examples:
   python -m model.evaluate_models
-  python -m model.evaluate_models --artifacts-dir model/artifacts --curated-dir model/datasets/curated
+  python -m model.evaluate_models --artifacts-dir model/artifacts --curated-dir model/datasets/testing/curated
   python -m model.evaluate_models --export model/artifacts/evaluation_report.json
   python -m model.evaluate_models --models intent_classifier approval_predictor
   python -m model.evaluate_models --no-colour
@@ -908,8 +910,8 @@ Examples:
     )
     parser.add_argument("--artifacts-dir", default="model/artifacts",
                         help="Directory containing trained model artifacts (default: model/artifacts)")
-    parser.add_argument("--curated-dir", default="model/datasets/curated",
-                        help="Directory containing curated train/test JSONL files (default: model/datasets/curated)")
+    parser.add_argument("--curated-dir", default="model/datasets/testing/curated",
+                        help="Directory containing held-out curated test JSONL files (default: model/datasets/testing/curated)")
     parser.add_argument("--export", default=None,
                         help="Path to write machine-readable JSON evaluation report")
     parser.add_argument("--models", nargs="*", default=None,

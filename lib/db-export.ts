@@ -1,3 +1,7 @@
+/**
+ * Copyright 2026 Nobin Sijo (NobinSijo7T).
+ * SPDX-License-Identifier: Apache-2.0
+ */
 // lib/db-export.ts
 // Full backup and restore utilities for PrismDB using dexie-export-import
 'use client';

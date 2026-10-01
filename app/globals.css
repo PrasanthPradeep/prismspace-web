@@ -1,10 +1,12 @@
+/* Copyright 2026 Nobin Sijo (NobinSijo7T).
+ * SPDX-License-Identifier: Apache-2.0
+ */
 /* All @import rules must come first */
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700;800;900&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&family=Quantico:wght@700&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Bitcount+Grid+Single:wght@100..900&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Permanent+Marker&display=swap');
-
 
 @tailwind base;
 @tailwind components;
@@ -78,13 +80,6 @@
     border-color: var(--border);
     outline-color: oklch(from var(--ring) l c h / 50%);
   }
-
-  /* Hide the system cursor only while the animated custom cursor is active */
-  html.custom-cursor *,
-  html.custom-cursor {
-    cursor: none !important;
-  }
-
   html {
     @apply overflow-x-hidden w-full h-full font-sans;
     scrollbar-width: none;
@@ -98,9 +93,10 @@
   body {
     @apply w-screen h-screen overflow-x-hidden overflow-y-auto text-white;
     font-family: 'Space Grotesk', sans-serif;
+    font-optical-sizing: auto;
     color: var(--prism-white);
     background-color: #090c12;
-    scroll-behavior: smooth;
+    /* scroll-behavior: smooth removed — overrides native momentum physics and cant be interrupted */
     scrollbar-width: none;
     -ms-overflow-style: none;
   }
@@ -117,6 +113,7 @@
     --font-heading: 'Space Grotesk', sans-serif;
     --font-sans: 'Space Grotesk', sans-serif;
     --font-mono: 'JetBrains Mono', monospace;
+    --animate-rainbow: rainbow var(--speed, 2s) infinite linear;
   }
 
   /* ── PrismSpace High-Voltage Developer OS Design Tokens ─────────────── */
@@ -209,12 +206,25 @@
     --chart-3: #94a3b8;
     --chart-4: #090c12;
     --chart-5: #06190e;
+    --color-1: oklch(66.2% 0.225 25.9);
+    --color-2: oklch(60.4% 0.26 302);
+    --color-3: oklch(69.6% 0.165 251);
+    --color-4: oklch(80.2% 0.134 225);
+    --color-5: oklch(90.7% 0.231 133);
+  }
+  .dark {
+    --color-1: oklch(66.2% 0.225 25.9);
+    --color-2: oklch(60.4% 0.26 302);
+    --color-3: oklch(69.6% 0.165 251);
+    --color-4: oklch(80.2% 0.134 225);
+    --color-5: oklch(90.7% 0.231 133);
   }
 }
 
 /* ── PrismSpace Component Classes ─────────────────────────────────────── */
 
 @layer components {
+
   /* Cutout Display Title Box */
   .cutout-box {
     display: inline-block;
@@ -229,7 +239,8 @@
     font-size: clamp(2.5rem, 5vw, 4rem);
     font-weight: 900;
     line-height: 0.92;
-    letter-spacing: -0.05em;
+    /* Tighter tracking at large sizes — glyphs read too far apart as they scale up */
+    letter-spacing: clamp(-0.05em, -0.01em + -0.01 * ((100vw - 320px) / 1280), -0.065em);
     color: var(--prism-primary);
     text-transform: lowercase;
   }
@@ -294,7 +305,8 @@
     border: 1px solid var(--prism-border-card);
     border-radius: var(--prism-radius-lg);
     padding: 10px 14px;
-    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    /* Split transition: avoids repainting all props; hover feels instant */
+    transition: background-color 120ms ease, border-color 120ms ease, box-shadow 200ms ease;
   }
 
   .layer-row:hover,
@@ -325,7 +337,8 @@
     box-shadow: 0 0 10px #00df81;
     border-radius: 999px;
     opacity: 0.95;
-    animation: flowBeamTravel 3s ease-in-out infinite;
+    /* Linear velocity (constant current), opacity handles the fade-in/out at edges */
+    animation: flowBeamTravel 3s linear infinite;
   }
 
   /* Live Status Radar Badge */
@@ -380,7 +393,8 @@
     font-family: 'JetBrains Mono', monospace;
     font-weight: 600;
     font-size: 12px;
-    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    /* Split properties: avoids full repaint of all; hover snaps fast */
+    transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
   }
 
   .prism-btn:hover {
@@ -388,9 +402,16 @@
     box-shadow: 0 0 20px var(--prism-primary-glow);
     background: var(--prism-card-active);
   }
+
+  /* Respond on pointer-down: shrinks instantly, releases with ease */
+  .prism-btn:active {
+    transform: scale(0.96);
+    transition: transform 80ms ease-out, border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
+  }
 }
 
 @layer utilities {
+
   /* Animation utilities */
   .animate-float-up {
     animation: floatUp 8s linear infinite;
@@ -401,12 +422,15 @@
       transform: translateY(100vh) rotate(0deg);
       opacity: 0;
     }
+
     10% {
       opacity: 1;
     }
+
     90% {
       opacity: 1;
     }
+
     100% {
       transform: translateY(-10px) rotate(360deg);
       opacity: 0;
@@ -464,25 +488,52 @@
 /* ── Keyframe Animations ──────────────────────────────────────────────── */
 
 @keyframes pulseDot {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.4; transform: scale(0.85); }
+
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.4;
+    transform: scale(0.85);
+  }
 }
 
 @keyframes flowBeamTravel {
-  0% { top: 0%; opacity: 0; }
-  10% { opacity: 0.95; }
-  90% { opacity: 0.95; }
-  100% { top: calc(100% - 70px); opacity: 0; }
+  0% {
+    top: 0%;
+    opacity: 0;
+  }
+  8% {
+    opacity: 0.95;
+  }
+  92% {
+    opacity: 0.95;
+  }
+  100% {
+    top: calc(100% - 70px);
+    opacity: 0;
+  }
 }
 
 @keyframes statusGlow {
-  0%, 100% { box-shadow: 0 0 8px var(--prism-primary-glow); }
-  50% { box-shadow: 0 0 20px var(--prism-primary-glow), 0 0 40px rgba(0, 223, 129, 0.1); }
+
+  0%,
+  100% {
+    box-shadow: 0 0 8px var(--prism-primary-glow);
+  }
+
+  50% {
+    box-shadow: 0 0 20px var(--prism-primary-glow), 0 0 40px rgba(0, 223, 129, 0.1);
+  }
 }
 
 /* ── Reduced Motion ───────────────────────────────────────────────────── */
 
 @media (prefers-reduced-motion: reduce) {
+  /* Stop purely decorative looping animations */
   .status-dot-pulse {
     animation: none;
     opacity: 1;
@@ -498,8 +549,113 @@
     animation: none;
   }
 
-  * {
-    transition-duration: 0.01ms !important;
-    animation-duration: 0.01ms !important;
+  /* Replace slide/spring transitions with opacity cross-fades — vestibular-safe */
+  /* Do NOT blanket-kill all transitions; color + opacity changes aid comprehension */
+  [data-motion-sensitive] {
+    transition: opacity 200ms ease !important;
+    transform: none !important;
+    animation: none !important;
   }
+}
+
+/* Reduce translucency for users who prefer solid backgrounds */
+@media (prefers-reduced-transparency: reduce) {
+  .obsidian-glass,
+  .hud-capsule,
+  .glass,
+  .glass-dark {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: #090c12 !important;
+  }
+}
+
+/* ── Custom Cyber-Glass Scrollbars ─────────────────────────────────────── */
+
+/* Horizontal custom scrollbar */
+.custom-horizontal-scrollbar {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 223, 129, 0.5) rgba(0, 0, 0, 0.4);
+  -webkit-overflow-scrolling: touch;
+}
+
+.custom-horizontal-scrollbar::-webkit-scrollbar {
+  height: 4px;
+}
+
+.custom-horizontal-scrollbar::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 9999px;
+  margin: 0 4px;
+}
+
+.custom-horizontal-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(90deg, rgba(0, 223, 129, 0.4), rgba(0, 223, 129, 0.8));
+  border-radius: 9999px;
+  border: 1px solid rgba(0, 223, 129, 0.25);
+  box-shadow: 0 0 6px rgba(0, 223, 129, 0.3);
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.custom-horizontal-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(90deg, rgba(0, 223, 129, 0.75), rgba(0, 242, 143, 1));
+  box-shadow: 0 0 10px rgba(0, 223, 129, 0.65);
+}
+
+.custom-horizontal-scrollbar::-webkit-scrollbar-thumb:active {
+  background: #00df81;
+  box-shadow: 0 0 14px rgba(0, 223, 129, 0.9);
+}
+
+/* Vertical custom scrollbar */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 223, 129, 0.35) rgba(0, 0, 0, 0.3);
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 9999px;
+  margin: 2px 0;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(0, 223, 129, 0.35);
+  border-radius: 9999px;
+  border: 1px solid rgba(0, 223, 129, 0.15);
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 223, 129, 0.7);
+  box-shadow: 0 0 8px rgba(0, 223, 129, 0.45);
+}
+
+@keyframes rainbow {
+  0% {
+    background-position: 0%;
+  }
+  100% {
+    background-position: 200%;
+  }
+}
+
+.lanyard-wrapper {
+  position: relative;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 560px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+  border-radius: 20px;
+  user-select: none;
 }

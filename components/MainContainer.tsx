@@ -1,23 +1,30 @@
+/**
+ * Copyright 2026 Nobin Sijo (NobinSijo7T).
+ * SPDX-License-Identifier: Apache-2.0
+ */
 'use client';
 
 import { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 import { Clock } from './Clock';
 import { SearchBar } from './SearchBar';
+import quotesData from '@/quotes.json';
 
 interface DailyQuotes {
   primary: string;
   secondary: string;
 }
 
+const dailyQuotes = quotesData as Record<string, DailyQuotes>;
+
 const fallbackQuotes: Record<string, DailyQuotes> = {
-  sunday:    { primary: "Rest and recharge, PRISM",        secondary: "User, Serene Sunday!" },
-  monday:    { primary: "Start your week strong, PRISM",   secondary: "User, Happy Monday!" },
-  tuesday:   { primary: "Build momentum today, PRISM",     secondary: "User, Terrific Tuesday!" },
-  wednesday: { primary: "You're halfway there, PRISM",     secondary: "User, Wonderful Wednesday!" },
-  thursday:  { primary: "Push through with power, PRISM",  secondary: "User, Thriving Thursday!" },
-  friday:    { primary: "Celebrate your success, PRISM",   secondary: "User, Happy Friday!" },
-  saturday:  { primary: "Enjoy your achievements, PRISM",  secondary: "User, Spectacular Saturday!" },
+  sunday: { primary: "Rest and recharge, PRISM", secondary: "User, Serene Sunday!" },
+  monday: { primary: "Start your week strong, PRISM", secondary: "User, Happy Monday!" },
+  tuesday: { primary: "Build momentum today, PRISM", secondary: "User, Terrific Tuesday!" },
+  wednesday: { primary: "You're halfway there, PRISM", secondary: "User, Wonderful Wednesday!" },
+  thursday: { primary: "Push through with power, PRISM", secondary: "User, Thriving Thursday!" },
+  friday: { primary: "Celebrate your success, PRISM", secondary: "User, Happy Friday!" },
+  saturday: { primary: "Enjoy your achievements, PRISM", secondary: "User, Spectacular Saturday!" },
 };
 
 const staggerContainer = {
@@ -55,14 +62,7 @@ export function MainContainer() {
     const today = new Date().getDay();
     const currentDay = days[today];
 
-    fetch('/quotes.json')
-      .then((res) => res.json())
-      .then((data) => {
-        setQuotes(data[currentDay] || fallbackQuotes[currentDay]);
-      })
-      .catch(() => {
-        setQuotes(fallbackQuotes[currentDay]);
-      });
+    setQuotes(dailyQuotes[currentDay] || fallbackQuotes[currentDay]);
   }, []);
 
   /**
@@ -70,8 +70,8 @@ export function MainContainer() {
    * Opens the AgentSwarm panel and pre-fills the objective from the search bar.
    * Uses a custom event so we don't need to thread props down through page.tsx.
    */
-  const handleAgentSubmit = (query: string) => {
-    window.dispatchEvent(new CustomEvent('prism:open-agent-swarm', { detail: { query } }));
+  const handleAgentSubmit = (query: string, model?: string, provider?: string) => {
+    window.dispatchEvent(new CustomEvent('prism:open-agent-swarm', { detail: { query, model, provider } }));
   };
 
   return (
@@ -86,15 +86,16 @@ export function MainContainer() {
       >
         {showGreetings && (
           <motion.div className="text-center mb-2" variants={staggerItem}>
-            <h1
+            <h1 className="sr-only">PrismSpace AI developer workspace</h1>
+            <p
               className="font-sans text-[2.4rem] font-[900] tracking-[-0.04em] leading-[1.05] lowercase mb-3 text-white drop-shadow-[0_2px_15px_rgba(0,0,0,0.6)]"
             >
               {quotes.primary}
-            </h1>
+            </p>
             <div className="cutout-box">
-              <h2 className="cutout-text text-[2rem]">
+              <p className="cutout-text text-[2rem]" style={{ fontWeight: 800 }}>
                 {quotes.secondary}
-              </h2>
+              </p>
             </div>
           </motion.div>
         )}

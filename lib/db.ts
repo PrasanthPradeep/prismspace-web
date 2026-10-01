@@ -1,3 +1,7 @@
+/**
+ * Copyright 2026 Nobin Sijo (NobinSijo7T).
+ * SPDX-License-Identifier: Apache-2.0
+ */
 // lib/db.ts
 // Centralized Dexie database for PrismSpace - client-side only
 'use client';

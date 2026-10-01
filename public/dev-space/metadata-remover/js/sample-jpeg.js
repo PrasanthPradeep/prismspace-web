@@ -1,3 +1,7 @@
+/**
+ * Copyright 2026 Nobin Sijo (NobinSijo7T).
+ * SPDX-License-Identifier: Apache-2.0
+ */
 export async function createSampleJpegFile() {
     const jpeg = await createCanvasJpegBytes();
     if (jpeg.length < 2 || jpeg[0] !== 0xff || jpeg[1] !== 0xd8) {

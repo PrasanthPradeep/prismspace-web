@@ -1,3 +1,7 @@
+/**
+ * Copyright 2026 Nobin Sijo (NobinSijo7T).
+ * SPDX-License-Identifier: Apache-2.0
+ */
 export function metadataSummary(entries) {
     if (entries.length === 0) {
         return 'No removable metadata';

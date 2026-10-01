@@ -1,5 +1,7 @@
+% Copyright 2026 Nobin Sijo (NobinSijo7T).
+% SPDX-License-Identifier: Apache-2.0
 \documentclass[11pt,a4paper]{article}
-\usepackage[margin=0.72in,top=0.70in,bottom=0.70in]{geometry}
+\usepackage[margin=0.70in,top=0.68in,bottom=0.68in]{geometry}
 \usepackage{amsmath,amssymb}
 \usepackage{times}
 \usepackage{enumitem}
@@ -7,226 +9,170 @@
 
 \pagestyle{fancy}
 \fancyhf{}
+\fancyhead[L]{\small Group Project $\cdot$ PrismSpace Architecture}
 \fancyhead[R]{\small\thepage}
-\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\headrulewidth}{0.4pt}
 \setlength{\headheight}{14.5pt}
 
 \setcounter{page}{6}
 
 \setlength{\parindent}{0pt}
-\setlength{\parskip}{0.35em}
-
-% Compact display equations
-\setlength{\abovedisplayskip}{4pt}
-\setlength{\belowdisplayskip}{4pt}
+\setlength{\parskip}{0.28em}
 
 \begin{document}
 
 % =========================================================================
-% PAGE 1 (Matching Screenshot 1 / Page 22)
+% PAGE 1 (Page 6): Overview, Inputs, Outputs, and Step 1
 % =========================================================================
 
 \subsection*{4.5\quad Algorithm of PrismSpace Multi-Agent System}
 
-\textbf{Input:}
-\begin{itemize}[leftmargin=1.5em, itemsep=0.25em, topsep=0.10em]
-    \item Natural language user objective, task specifications, and operational constraints ($\mathcal{T}_{\text{user}}$).
-    \item Multi-source curated corpora and execution traces ($\mathcal{D}$), spanning LMSYS Arena, RouterBench, WildGuard, CMU Agent Trajectories, and PrismSpace Runtime Events.
-    \item Curated preference alignment pairs ($\mathcal{D}_{\text{pref}} = \{(x, y_w, y_l)\}$), containing user prompt $x$, winning/chosen agent completion $y_w$, and losing/rejected completion $y_l$.
-    \item Global multi-agent swarm and tool registry ($\mathcal{G}_{\text{global}} = (V, E)$), comprising the Supervisor Hub, specialized worker agents (Coding, Research, Validator, Planner), and Model Context Protocol (\textbf{MCP}: open standard defining structured JSON-RPC communication between agents and tools) endpoints.
+The PrismSpace algorithm orchestrates multiple specialized AI agents into a coordinated swarm: interpreting user objectives, routing tasks to the optimal LLM provider, dispatching specialized agents, equipping them with tools, and verifying safety and accuracy. The workflow operates in three distinct phases:
+\begin{itemize}[leftmargin=1.5em, itemsep=0.10em, topsep=0.04em]
+    \item \textbf{Phase I: Offline Swarm Graph Representation} (Steps 1--5: Data prep, swarm graph, GAT routing)
+    \item \textbf{Phase II: Single-Stage Preference Alignment} (Step 6: Safety and quality tuning via ORPO)
+    \item \textbf{Phase III: Online Runtime Inference \& Swarm Execution} (Steps 7--9: Live execution, evaluation, telemetry)
 \end{itemize}
 
-\textbf{Output:}
-\begin{itemize}[leftmargin=1.5em, itemsep=0.25em, topsep=0.10em]
-    \item Predicted intent category ($\hat{y}_{\text{intent}}$) and optimal Large Language Model (\textbf{LLM}: deep neural network trained for language comprehension and generation) provider $\hat{y}_{\text{provider}}$ (e.g., Groq, NVIDIA, OpenAI, Anthropic, Google).
-    \item Swarm agent dispatch vector ($\hat{\mathbf{y}}_{\text{agents}} \in \{0, 1\}^{|V|}$) and safety approval gate decision ($\hat{y}_{\text{approval}} \in \{0, 1\}$).
-    \item Active collaboration topology Directed Acyclic Graph ($\mathcal{G}_{\text{active}}$ [\textbf{DAG}: a directed graph without closed cycles, establishing execution dependencies]) with cost ($\hat{c}$) and latency ($\hat{\ell}$) predictions.
-    \item Preference-aligned adapter weights ($\Delta \mathbf{W}$) optimizing response quality, policy compliance, and safety margin.
-    \item Performance evaluation metrics: \textbf{Accuracy} (correct prediction ratio), \textbf{Macro-F1} (unweighted harmonic mean of precision and recall across all classes), \textbf{ROC-AUC} (Area Under the Receiver Operating Characteristic Curve measuring discrimination across thresholds), \textbf{ECE} (Expected Calibration Error: average gap between confidence and accuracy), \textbf{Brier Score} (probability forecast error), \textbf{$R^2$} (Coefficient of Determination: explained variance), and \textbf{MAE} (Mean Absolute Error: average magnitude of prediction errors).
+\vspace{0.20em}
+\textbf{Inputs (What Goes In):}
+\begin{itemize}[leftmargin=1.5em, itemsep=0.10em, topsep=0.04em]
+    \item \textbf{User Objective ($\mathcal{T}_{\text{user}}$):} Natural language user prompt, operational scope, and execution constraints.
+    \item \textbf{Curated Training Corpora ($\mathcal{D}$):} Multi-source benchmark datasets containing prompt traces, intent categories, safety evaluations (WildGuard), and multi-agent trajectories (RouterBench, LMSYS Arena, CMU Agent Benchmark).
+    \item \textbf{Preference Alignment Pairs ($\mathcal{D}_{\text{pref}} = \{(x, y_w, y_l)\}$):} Prompt $x$ paired with preferred response $y_w$ and disfavored response $y_l$.
+    \item \textbf{Global Agent Swarm Registry ($\mathcal{G}_{\text{global}} = (V, E)$):} Roster of specialized AI agents (Supervisor, Coding, Research, Validator, Planner) and Model Context Protocol (MCP) tool endpoints.
 \end{itemize}
 
-\vspace{0.6em}
-\textbf{Step 1: Data Acquisition and Preprocessing}
-\begin{enumerate}[leftmargin=1.5em, itemsep=0.28em, topsep=0.12em]
-    \item Ingest heterogeneous records from multi-source corpora ($\mathcal{D}$) covering intent traces, safety pairs, tool telemetry, and conversational benchmarks.
-    \item Clean and normalize feature values (strip corrupt 8-bit Unicode Transformation Format [\textbf{UTF-8}: standard variable-width character encoding] sequences, normalize whitespace, remove duplicates).
-    \item Encode categorical agent attributes and tool capabilities (e.g., persona role, execution scope).
-    \item Standardize all numerical features to zero mean and unit variance:
-    \[
-    z_i = \frac{x_i - \mu_x}{\sigma_x}
-    \]
-    \item Split the dataset into 80\% training ($\mathcal{D}_{\text{train}}$), 10\% validation ($\mathcal{D}_{\text{val}}$), and 10\% testing ($\mathcal{D}_{\text{test}}$) partitions.
+\vspace{0.20em}
+\textbf{Outputs (What Comes Out):}
+\begin{itemize}[leftmargin=1.5em, itemsep=0.10em, topsep=0.04em]
+    \item \textbf{Task Intent \& Best Provider:} Predicted task category ($\hat{y}_{\text{intent}}$) and optimal LLM provider ($\hat{y}_{\text{provider}}$, e.g., Groq for rapid response, OpenAI/Anthropic for complex reasoning).
+    \item \textbf{Swarm Dispatch Vector ($\hat{\mathbf{y}}_{\text{agents}}$):} Binary activation checklist ($1$ = active, $0$ = idle) for each agent in $V$.
+    \item \textbf{Execution Plan ($\mathcal{G}_{\text{active}}$):} Directed Acyclic Graph (DAG) outlining task steps with predicted latency ($\hat{\ell}$) and cost ($\hat{c}$).
+    \item \textbf{Tuned Model Adapters ($\Delta \mathbf{W}$):} Lightweight LoRA weights ensuring helpfulness and safety compliance.
+    \item \textbf{Evaluation Metrics:} Quantitative benchmarks including Accuracy, F1-Score, ROC-AUC, and ECE calibration.
+\end{itemize}
+
+\vspace{0.35em}
+\textbf{Step 1: Data collection and Preprocessing}
+\begin{enumerate}[leftmargin=1.8em, itemsep=0.22em, topsep=0.06em]
+    \item Import and unify raw records across multi-source benchmark datasets ($\mathcal{D}$), mapping heterogeneous prompt schemas, classification labels, and tool invocation logs into a structured, unified schema.
+    \item Clean and sanitize the textual dataset by stripping malformed Unicode sequences, removing redundant whitespace tokens, trimming uninformative control characters, and filtering duplicate prompt-response pairs.
+    \item Perform categorical encoding across discrete metadata attributes (agent role definitions, tool protocol capabilities, provider endpoints) into dense numerical vectors.
+    \item Standardize continuous numerical features (token length, baseline query complexity, empirical latency traces) using $z$-score normalization: subtract the empirical feature mean and divide by standard deviation ($z = (x - \mu)/\sigma$) to yield zero mean and unit variance across all dimensions.
+    \item Partition the processed dataset via stratified random sampling into three non-overlapping subsets:
+    \begin{itemize}[leftmargin=1.5em, itemsep=0.08em, topsep=0.04em, label=$\ast$]
+        \item 80\% Training set ($\mathcal{D}_{\text{train}}$) for model parameter optimization and graph embedding learning
+        \item 10\% Validation set ($\mathcal{D}_{\text{val}}$) for hyperparameter tuning, pruning, and early stopping
+        \item 10\% Testing set ($\mathcal{D}_{\text{test}}$) for unbiased evaluation of routing accuracy and safety alignment
+    \end{itemize}
 \end{enumerate}
 
 \newpage
 
 % =========================================================================
-% PAGE 2: Graph Construction & Attention-Based Message Passing
+% PAGE 2 (Page 7): Steps 2, 3, 4, and 5
 % =========================================================================
 
-\textbf{Step 2: Graph Construction}
-\begin{enumerate}[leftmargin=1.5em, itemsep=0.30em, topsep=0.12em]
-    \item Treat each agent persona and MCP tool $v_i$ as a node in the swarm graph ($V$).
-    \item Compute pairwise similarity between feature vectors using \textbf{Pearson correlation}:
-    \[
-    s_{ij} = \frac{\mathrm{Cov}(\mathbf{x}_i, \mathbf{x}_j)}{\sigma_{\mathbf{x}_i}\sigma_{\mathbf{x}_j}}
-    \]
-    where $\mathrm{Cov}$ denotes Covariance (statistical measure of joint directional variance between two feature distributions).
-    \item Define adjacency matrix $\mathbf{A}$ such that:
-    \[
-    A_{ij} = \begin{cases} 1, & \text{if } s_{ij} \ge \tau \\ 0, & \text{otherwise} \end{cases}
-    \]
-    where $\tau$ is the similarity threshold.
-    \item Construct the graph $\mathcal{G} = (V, E)$ with edges $E$ derived from adjacency matrix $\mathbf{A}$.
+\textbf{Step 2: Swarm Graph Construction}
+\begin{enumerate}[leftmargin=1.8em, itemsep=0.20em, topsep=0.05em]
+    \item Define the node set ($V$): represent each specialized AI agent persona (Supervisor, Research, Coding, Validator, Planner) and each Model Context Protocol (MCP) tool as an individual vertex $v_i \in V$.
+    \item Evaluate pairwise functional capability similarity: compute the Pearson correlation coefficient between node capability vectors $\mathbf{x}_i$ and $\mathbf{x}_j$, defined as the covariance of their feature distributions divided by the product of their standard deviations ($s_{ij} = \mathrm{Cov}(\mathbf{x}_i, \mathbf{x}_j) / (\sigma_i \sigma_j)$).
+    \item Establish collaborative topological connections: generate binary adjacency matrix $\mathbf{A}$ by comparing similarity against correlation cutoff $\tau$, setting $A_{ij} = 1$ when pairwise similarity meets or exceeds threshold ($s_{ij} \ge \tau$) and $A_{ij} = 0$ otherwise.
+    \item Construct the global swarm topology $\mathcal{G} = (V, E)$: establish undirected collaborative communication edges $E$ that permit message propagation exclusively between complementary agent and tool pairings.
 \end{enumerate}
 
-\vspace{0.6em}
-\textbf{Step 3: Graph Attention Network (\textbf{GAT}) Initialization}
-\begin{enumerate}[leftmargin=1.5em, itemsep=0.30em, topsep=0.12em]
-    \item Initialize node embeddings $\mathbf{h}_i = \mathbf{x}_i$ for all nodes $v_i \in V$ in the Graph Attention Network (\textbf{GAT}: neural architecture utilizing self-attention to weight graph neighbor connections).
-    \item Initialize weight matrix $\mathbf{W}$ and attention vector $\mathbf{a}$ with random values.
-    \item Set Learning Rate (\textbf{LR}: optimization step size governing parameter updates), number of attention heads ($K$), and dropout probability ($p$).
+\vspace{0.30em}
+\textbf{Step 3: Graph Attention Network (GAT) Initialization}
+\begin{enumerate}[leftmargin=1.8em, itemsep=0.20em, topsep=0.05em]
+    \item Initialize node representations: assign each vertex $v_i \in V$ an initial $d$-dimensional feature embedding vector $\mathbf{h}_i = \mathbf{x}_i \in \mathbb{R}^d$ describing agent operational scope, prompt semantics, and tool interface signatures.
+    \item Initialize projection and attention parameters: instantiate weight projection matrix $\mathbf{W} \in \mathbb{R}^{d' \times d}$ and shared attention mechanism vector $\mathbf{a} \in \mathbb{R}^{2d'}$ via Xavier uniform initialization, ensuring stable variance across forward and backward signal propagation.
+    \item Configure network hyperparameters: establish learning rate $\eta$, attention head count $K$ (specialized across task intent, model capability, swarm affinity, and safety constraints), and dropout regularization probability $p$.
 \end{enumerate}
 
-\vspace{0.6em}
+\vspace{0.30em}
 \textbf{Step 4: Attention-Based Message Passing}
-\begin{enumerate}[leftmargin=1.5em, itemsep=0.30em, topsep=0.12em]
-    \item For each node $v_i$, compute attention scores for all its neighbors $v_j \in \mathcal{N}(i)$:
-    \[
-    e_{ij} = \mathrm{LeakyReLU}\left(\mathbf{a}^T [\mathbf{W} \mathbf{h}_i \parallel \mathbf{W} \mathbf{h}_j]\right)
-    \]
-    where $\mathrm{LeakyReLU}$ denotes Leaky Rectified Linear Unit (activation function with a small non-zero slope for negative values to prevent dead neurons), and $\parallel$ represents feature concatenation.
-    \item Normalize attention coefficients using the softmax function:
-    \[
-    \alpha_{ij} = \frac{\exp(e_{ij})}{\sum_{k \in \mathcal{N}(i)} \exp(e_{ik})}
-    \]
-    \item Update the hidden representation of node $v_i$:
-    \[
-    \mathbf{h}_i' = \sigma\left(\sum_{j \in \mathcal{N}(i)} \alpha_{ij} \mathbf{W} \mathbf{h}_j\right)
-    \]
-    \item Apply dropout regularization and repeat for all layers.
+
+For each node $v_i$ with immediate collaborative neighborhood $\mathcal{N}(i)$:
+\begin{enumerate}[leftmargin=1.8em, itemsep=0.20em, topsep=0.05em]
+    \item Compute raw attention coefficients with connected neighbors $v_j \in \mathcal{N}(i)$: project node features through transformation matrix $\mathbf{W}$, concatenate projected states $[\mathbf{W}\mathbf{h}_i \parallel \mathbf{W}\mathbf{h}_j]$, compute inner product with attention vector $\mathbf{a}$, and apply LeakyReLU non-linearity: $e_{ij} = \mathrm{LeakyReLU}(\mathbf{a}^T [\mathbf{W} \mathbf{h}_i \parallel \mathbf{W} \mathbf{h}_j])$.
+    \item Normalize coefficients across the local neighborhood using Softmax: calculate positive attention weights $\alpha_{ij} = \exp(e_{ij}) / \sum_{k \in \mathcal{N}(i)} \exp(e_{ik})$ that sum to unity, quantifying the relative communicative significance of neighbor $j$ to node $i$.
+    \item Aggregate neighborhood feature representations: compute a weighted linear sum of neighbors' transformed representations scaled by attention weights, followed by non-linear activation $\mathbf{h}_i' = \sigma\big(\sum_{j \in \mathcal{N}(i)} \alpha_{ij} \mathbf{W} \mathbf{h}_j\big)$.
+    \item Multi-head attention concatenation: execute $K$ independent attention heads in parallel and concatenate their output representations $\mathbf{h}_i' = \Vert_{k=1}^K \sigma\big(\sum_{j \in \mathcal{N}(i)} \alpha_{ij}^k \mathbf{W}^k \mathbf{h}_j\big)$, capturing rich, multi-perspective collaborative semantics.
 \end{enumerate}
 
-\newpage
-
-% =========================================================================
-% PAGE 3: Classification & Preference Alignment (ORPO)
-% =========================================================================
-
+\vspace{0.30em}
 \textbf{Step 5: Classification and Loss Computation}
-\begin{enumerate}[leftmargin=1.5em, itemsep=0.30em, topsep=0.12em]
-    \item Feed the final embeddings $\mathbf{h}_i'$ into a fully connected classification layer:
-    \[
-    \hat{y}_i = \mathrm{Sigmoid}(\mathbf{W}_c \mathbf{h}_i')
-    \]
-    \item Compute the Binary Cross-Entropy (\textbf{BCE}: loss function quantifying divergence between true binary labels and predicted probabilities) loss:
-    \[
-    L = -\frac{1}{n} \sum_{i=1}^n \left[ y_i \log(\hat{y}_i) + (1 - y_i) \log(1 - \hat{y}_i) \right]
-    \]
-    \item Backpropagate the loss through the network and update parameters $\theta = \{\mathbf{W}, \mathbf{a}, \mathbf{W}_c\}$ using the Adam optimizer (\textbf{Adam}: Adaptive Moment Estimation, an algorithm combining momentum and RMSProp gradient scaling).
-\end{enumerate}
-
-\vspace{0.6em}
-\textbf{Step 6: Preference Alignment and Reward Optimization (\textbf{ORPO})}
-\begin{enumerate}[leftmargin=1.5em, itemsep=0.28em, topsep=0.12em]
-    \item Ingest curated preference triples $\mathcal{D}_{\text{pref}} = \{(x, y_w, y_l)\}$ comprising user prompt $x$, winning/chosen agent completion $y_w$, and losing/rejected completion $y_l$.
-    \item Parameterize the base causal language model via Parameter-Efficient Fine-Tuning (\textbf{PEFT}: techniques adapting foundation models with minimal trainable weights) using Low-Rank Adaptation (\textbf{LoRA}: parameter-efficient fine-tuning decomposing weight updates into low-rank matrices $\Delta \mathbf{W} = \frac{\alpha}{r} \mathbf{B}\mathbf{A}$).
-    \item Compute the Supervised Fine-Tuning (\textbf{SFT}: training language models via next-token teacher forcing) Negative Log-Likelihood (\textbf{NLL}: loss measuring prediction error of ground-truth token sequences) on the chosen response $y_w$:
-    \[
-    \mathcal{L}_{\mathrm{SFT}}(\theta) = -\frac{1}{|y_w|} \sum_{t=1}^{|y_w|} \log P_\theta(y_{w,t} \mid x, y_{w,<t})
-    \]
-    \item Formulate the length-normalized sequence probability $P_\theta(y \mid x) = \left(\prod_{t=1}^{|y|} P_\theta(y_t \mid x, y_{<t})\right)^{\frac{1}{|y|}}$ and define the generative odds of sequence $y$ given prompt $x$:
-    \[
-    \mathrm{odds}_\theta(y \mid x) = \frac{P_\theta(y \mid x)}{1 - P_\theta(y \mid x)}
-    \]
-    \item Compute the Odds Ratio preference loss to penalize disfavored agent behaviors without requiring a reference model:
-    \[
-    \mathcal{L}_{\mathrm{OR}}(\theta) = -\log \sigma \left( \log \frac{\mathrm{odds}_\theta(y_w \mid x)}{\mathrm{odds}_\theta(y_l \mid x)} \right)
-    \]
-    where $\sigma$ denotes the Sigmoid activation function.
-    \item Optimize the unified Odds Ratio Preference Optimization (\textbf{ORPO}: reference-model-free alignment technique directly penalizing disfavored generation odds during supervised fine-tuning) objective:
-    \[
-    \mathcal{L}_{\mathrm{ORPO}}(\theta) = \mathcal{L}_{\mathrm{SFT}}(\theta) + \beta \cdot \mathcal{L}_{\mathrm{OR}}(\theta)
-    \]
-    where $\beta$ is the preference penalty scaling hyperparameter (e.g., $\beta = 0.1$).
+\begin{enumerate}[leftmargin=1.8em, itemsep=0.20em, topsep=0.05em]
+    \item Route updated swarm representations $\mathbf{h}_i'$ through dual specialized prediction heads:
+    \begin{itemize}[leftmargin=1.5em, itemsep=0.06em, topsep=0.03em, label=$\ast$]
+        \item \textit{Intent \& Provider Routing Head:} Computes normalized routing probabilities via Softmax ($\hat{\mathbf{y}}_{\text{route}} = \mathrm{Softmax}(\mathbf{W}_{\text{route}} \mathbf{h}' + \mathbf{b}_{\text{route}})$), selecting the optimal foundation model provider based on task difficulty and speed.
+        \item \textit{Agent Dispatch Head:} Evaluates independent activation probabilities per agent persona via element-wise Sigmoid ($\hat{y}_{\text{agent}, i} = \mathrm{Sigmoid}(\mathbf{W}_{\text{agent}} \mathbf{h}_i' + b_i)$), determining active swarm membership.
+    \end{itemize}
+    \item Compute unified multi-task loss ($\mathcal{L}_{\text{class}}$): combine categorical cross-entropy for provider routing with binary cross-entropy across agent dispatch activations, balancing classification accuracy with minimal swarm over-provisioning: $\mathcal{L}_{\text{class}} = \mathcal{L}_{\text{CE}}(\mathbf{y}_{\text{route}}, \hat{\mathbf{y}}_{\text{route}}) + \lambda \sum_{v \in V} \mathcal{L}_{\text{BCE}}(y_v, \hat{y}_v)$.
+    \item Optimize parameters: backpropagate error gradients and update network parameters using the AdamW optimizer with cosine learning-rate decay and gradient norm clipping.
 \end{enumerate}
 
 \newpage
 
 % =========================================================================
-% PAGE 4: Runtime Inference, Swarm Execution, and UI Generation
+% PAGE 3 (Page 8): Steps 6 and 7
 % =========================================================================
 
-\textbf{Step 7: Real-Time Runtime Inference, Swarm Execution, and UI Generation}
-\begin{enumerate}[leftmargin=1.5em, itemsep=0.30em, topsep=0.12em]
-    \item \textbf{User Input Ingestion}: Capture natural language task objective $\mathcal{T}_{\text{user}}$ submitted via the Next.js User Interface (\textbf{UI}: client-facing presentation layer for reactive interaction) and transmit via Hypertext Transfer Protocol (\textbf{HTTP}: standard web communication protocol) POST to the FastAPI Hive Bridge Application Programming Interface (\textbf{API}: formal programmatic contract enabling service communication).
-    \item \textbf{Query Vectorization}: Extract lexical, semantic, and telemetry features:
-    \[
-    \mathbf{x}_{\text{query}} = [\mathbf{v}_{\text{TF-IDF}}(\mathcal{T}_{\text{user}}) \parallel \mathbf{e}_{\text{dense}}(\mathcal{T}_{\text{user}}) \parallel \mathbf{f}_{\text{meta}}]
-    \]
-    where $\parallel$ denotes vector concatenation, and $\mathbf{f}_{\text{meta}}$ encodes query length, token count, and domain complexity.
-    \item \textbf{GAT Model Routing Inference}: Compute hidden query state $\mathbf{h}_{\text{query}}'$ to predict intent, optimal LLM provider, and active agent dispatch mask:
-    \[
-    \hat{y}_{\text{intent}}, \; \hat{y}_{\text{provider}} = \mathrm{argmax}\left(\mathrm{Softmax}(\mathbf{W}_{\text{route}} \mathbf{h}_{\text{query}}')\right), \quad \hat{\mathbf{y}}_{\text{agents}} = \mathbb{I}\left(\mathrm{Sigmoid}(\mathbf{W}_{\text{agent}} \mathbf{h}_{\text{query}}') \ge \tau_{\text{dispatch}}\right)
-    \]
-    where $\mathbb{I}(\cdot)$ is the indicator function and $\tau_{\text{dispatch}}$ is the routing activation threshold.
-    \item \textbf{Active DAG Task Scheduling}: Synthesize Directed Acyclic Graph $\mathcal{G}_{\text{active}} = (V_{\text{active}}, E_{\text{active}})$ over active agents $V_{\text{active}} = \{v_i \in V \mid \hat{\mathbf{y}}_{\text{agents}, i} = 1\}$, sorted into execution sequence $\pi = \mathrm{TopologicalSort}(\mathcal{G}_{\text{active}})$.
-    \item \textbf{Autonomous ReAct Swarm Execution}: For each agent $v_i \in \pi$, execute Reasoning and Acting (\textbf{ReAct}: paradigm interleaving chain-of-thought reasoning with tool execution actions) invoking Model Context Protocol (\textbf{MCP}) endpoints via JavaScript Object Notation Remote Procedure Call (\textbf{JSON-RPC}: lightweight remote procedure call protocol):
-    \[
-    a_{i, t} = \mathrm{LLM}_{\hat{y}_{\text{provider}}}(\mathcal{T}_{\text{user}}, h_{i, <t}), \quad o_{i, t} = \mathrm{Exec}_{\text{MCP}}(a_{i, t})
-    \]
-    where $a_{i,t}$ represents the action/tool call payload and $o_{i,t}$ denotes the environment observation.
-    \item \textbf{ORPO Safety Gate Verification}: Evaluate candidate completion $\hat{y}_{\text{candidate}}$ using the preference policy:
-    \[
-    \mathrm{Score}_{\text{policy}} = \log \frac{\mathrm{odds}_\theta(\hat{y}_{\text{candidate}} \mid \mathcal{T}_{\text{user}})}{\mathrm{odds}_\theta(y_{\text{ref}} \mid \mathcal{T}_{\text{user}})}
-    \]
-    Approve output if $\mathrm{Score}_{\text{policy}} \ge \tau_{\text{safety}}$; otherwise reroute to Validator agent for policy correction.
-    \item \textbf{Real-Time Streaming to UI and Client Persistence}: Stream output tokens and agent thought states to the client via Server-Sent Events (\textbf{SSE}: persistent unidirectional streaming protocol):
-    \[
-    \text{State}_{\text{UI}}^{(t)} = \text{State}_{\text{UI}}^{(t-1)} \cup \{\Delta_{\text{token}}^{(t)}, \text{Card}_{\text{agent}}\}
-    \]
-    Upon stream completion, commit conversation turns, generated artifacts, and telemetry to the browser's local IndexedDB (Dexie.js) for reactive rendering via \texttt{useLiveQuery}.
+\textbf{Step 6: Single-Stage Preference Alignment (ORPO)}
+\begin{enumerate}[leftmargin=1.8em, itemsep=0.22em, topsep=0.06em]
+    \item Inject Parameter-Efficient Fine-Tuning (PEFT) adapters: attach low-rank decomposition matrices ($\Delta \mathbf{W} = \frac{\alpha}{r} \mathbf{B}\mathbf{A}$) to attention projection layers of the base language model, enabling targeted adaptation while keeping foundational weights frozen.
+    \item Compute the supervised fine-tuning (SFT) objective: calculate the sequence negative log-likelihood loss exclusively on favored human responses ($y_w$), preserving foundational language fluency and structured syntax: $\mathcal{L}_{\mathrm{SFT}} = -\frac{1}{|y_w|} \sum_{t=1}^{|y_w|} \log P(y_{w,t} \mid x, y_{w,<t})$.
+    \item Calculate length-normalized sequence odds: evaluate the likelihood of token sequence $y \in \{y_w, y_l\}$ using the odds formulation $\mathrm{odds}(y \mid x) = P(y \mid x) / [1 - P(y \mid x)]$, where per-token probabilities are geometrically averaged across sequence length to eliminate bias favoring shorter answers.
+    \item Formulate the Odds Ratio (OR) preference penalty: calculate the negative log-sigmoid of the log-odds ratio between favored ($y_w$) and disfavored ($y_l$) completions: $\mathcal{L}_{\mathrm{OR}} = -\log \sigma \big(\log [\mathrm{odds}(y_w \mid x) / \mathrm{odds}(y_l \mid x)]\big)$, actively disincentivizing unsafe, hallucinated, or low-quality patterns.
+    \item Optimize unified single-stage ORPO objective: jointly minimize the composite loss $\mathcal{L}_{\mathrm{ORPO}} = \mathcal{L}_{\mathrm{SFT}} + \beta \cdot \mathcal{L}_{\mathrm{OR}}$, achieving concurrent instruction following and safety preference alignment without requiring a separate reward model or reinforcement learning phase.
+\end{enumerate}
+
+\vspace{0.40em}
+\textbf{Step 7: Real-Time Runtime Inference and Swarm Execution}
+\begin{enumerate}[leftmargin=1.8em, itemsep=0.22em, topsep=0.06em]
+    \item Capture user objective: ingest natural language prompt $\mathcal{T}_{\text{user}}$ via the Next.js client interface and securely dispatch it to the FastAPI Hive Bridge orchestration gateway.
+    \item Synthesize query feature vector ($\mathbf{x}_{\text{query}}$): concatenate sparse TF-IDF n-gram vectors, dense semantic sentence embeddings, and session contextual metadata (token budget, latency requirements, user tool permissions).
+    \item Determine routing and dispatch policy: assign the prompt to the highest-scoring LLM provider via argmax selection on routing probabilities ($\hat{y}_{\text{provider}} = \mathrm{argmax}(\hat{\mathbf{y}}_{\text{route}})$), and activate all worker agents whose dispatch score meets threshold $\tau_{\text{dispatch}}$ ($\hat{\mathbf{y}}_{\text{agents}} = \mathbb{I}(\hat{\mathbf{y}}_{\text{dispatch}} \ge \tau_{\text{dispatch}})$).
+    \item Formulate task DAG and execution schedule: generate active dependency graph $\mathcal{G}_{\text{active}}$ and execute a topological sort ($\pi = \mathrm{TopologicalSort}(\mathcal{G}_{\text{active}})$) to determine parallel and sequential task execution phases.
+    \item Execute autonomous ReAct swarm loops: dispatch agents to iteratively reason, propose actions, and invoke Model Context Protocol (MCP) tool endpoints (Browser, Filesystem, GitHub, Python Sandbox), aggregating intermediate tool observation traces until all subtask criteria are satisfied.
+    \item Enforce policy safety gating: evaluate final candidate completions through the calibrated safety gate, verifying that the log-odds safety score relative to reference text meets safety threshold $\tau_{\text{safety}}$, intercepting prompt injection, unsafe operations, or policy violations.
+    \item Deliver real-time response and persist session state: stream verified response tokens live to the frontend via Server-Sent Events (SSE), update real-time telemetry HUD metrics, and commit complete conversation artifacts to local browser IndexedDB storage using Dexie.js.
 \end{enumerate}
 
 \newpage
 
 % =========================================================================
-% PAGE 5: Evaluation, Visualization, and Summary
+% PAGE 4 (Page 9): Steps 8, 9, and Summary
 % =========================================================================
 
 \textbf{Step 8: Model Evaluation}
-\begin{enumerate}[leftmargin=1.5em, itemsep=0.28em, topsep=0.12em]
-    \item Evaluate the trained routing and alignment models on validation and test partitions.
-    \item Compute classification and preference evaluation metrics:
-    \begin{itemize}[leftmargin=1.2em, itemsep=0.22em, topsep=0.10em]
-        \item \textbf{Accuracy}: Ratio of correct predictions over total predictions:
-        \[
-        \mathrm{Accuracy} = \frac{TP + TN}{TP + TN + FP + FN}
-        \]
-        where:
-        \begin{itemize}[leftmargin=1.0em, itemsep=0.08em, topsep=0.04em]
-            \item \textbf{TP}: True Positives (positive cases correctly identified as positive).
-            \item \textbf{TN}: True Negatives (negative cases correctly identified as negative).
-            \item \textbf{FP}: False Positives (negative cases incorrectly classified as positive; Type I error).
-            \item \textbf{FN}: False Negatives (positive cases incorrectly classified as negative; Type II error).
-        \end{itemize}
-        \item \textbf{AUC}: Area Under the Curve of the Receiver Operating Characteristic (\textbf{ROC}: curve plotting True Positive Rate vs. False Positive Rate across thresholds) to assess discrimination capability.
-        \item \textbf{AUPRC}: Area Under the Precision-Recall Curve (metric evaluating precision-recall trade-offs especially under severe class imbalance).
+\begin{enumerate}[leftmargin=1.8em, itemsep=0.22em, topsep=0.06em]
+    \item Assess generalization performance: benchmark trained GAT routing and ORPO alignment models against holdout validation ($\mathcal{D}_{\text{val}}$) and test ($\mathcal{D}_{\text{test}}$) splits to quantify accuracy and preference adherence.
+    \item Compute comprehensive quantitative validation metrics:
+    \begin{itemize}[leftmargin=1.5em, itemsep=0.08em, topsep=0.04em, label=$\ast$]
+        \item \textit{Routing Accuracy \& Macro-F1:} Measure proportion of correctly classified intents and provider selections, computing harmonic mean of precision and recall to evaluate balanced performance across rare and frequent task classes.
+        \item \textit{Discrimination Capability (ROC-AUC \& AUPRC):} Measure the area under the receiver operating characteristic and precision--recall curves to assess safety gate discrimination under class imbalance.
+        \item \textit{Calibration Quality (ECE):} Measure Expected Calibration Error across $M$ probability bins ($\mathrm{ECE} = \sum_{m=1}^M \frac{|B_m|}{N} |\mathrm{acc}(B_m) - \mathrm{conf}(B_m)|$) to verify that predicted routing confidence aligns with empirical accuracy.
+        \item \textit{Regression Precision ($R^2$ \& MAE):} Quantify predictive fidelity of task latency ($\hat{\ell}$) and monetary token cost ($\hat{c}$) against actual multi-agent execution traces.
     \end{itemize}
-    \item Save the trained model parameters, LoRA adapters, and generate prediction outputs.
+    \item Save optimized model checkpoints, export weight artifacts, and log diagnostic performance reports.
 \end{enumerate}
 
-\vspace{0.6em}
+\vspace{0.40em}
 \textbf{Step 9: Visualization and Interpretation}
-\begin{itemize}[leftmargin=1.5em, itemsep=0.28em, topsep=0.10em]
-    \item Visualize learned attention weights to identify key routing features contributing to optimal swarm delegation.
-    \item Generate performance plots (loss curve, ROC, precision-recall, reward margin distribution).
-    \item Analyze high-attention edges to reveal biologically meaningful and task-optimal variant relationships.
+\begin{itemize}[leftmargin=1.8em, itemsep=0.22em, topsep=0.06em, label=$\blacktriangleright$]
+    \item Generate convergence diagnostics: plot training and validation loss trajectories, ROC curves, and precision--recall frontiers to track learning progression and over-fitting boundaries.
+    \item Inspect attention heatmaps: visualize inter-agent and agent-tool attention weight matrices across the $K$ attention heads, identifying dominant collaboration pathways and tool utilization dependencies.
+    \item Monitor live operational telemetry: track real-time routing hit rates, token cost allocations ($\hat{c}$), task latency profiles ($\hat{\ell}$), and safety policy pass rates on the Swarm Telemetry HUD.
 \end{itemize}
 
-\vspace{0.8em}
+\vspace{0.40em}
 \textbf{Algorithm Summary}
-
-The algorithm coordinates intelligent model routing, preference alignment, and real-time execution into a cohesive user workflow. By modeling specialized agents and tools through a Graph Attention Network (\textbf{GAT}), the system learns how agent capabilities complement one another, dynamically routing each incoming request to the most capable and cost-effective language model provider. To guarantee that generated actions remain safe and compliant with user intentions, Odds Ratio Preference Optimization (\textbf{ORPO}) directly refines model behaviors against curated preference pairs without reference model overhead. Once an objective is submitted in the web interface, the algorithm deconstructs it into a structured plan, orchestrates autonomous agents to execute tools, verifies safety policies, and streams responses incrementally into the browser's local IndexedDB (Dexie.js). This design ensures transparent, dependable, and responsive multi-agent task execution across both research workflows and enterprise applications.
+\begin{enumerate}[leftmargin=1.8em, itemsep=0.18em, topsep=0.05em]
+    \item \textbf{Graph-Attentive Swarm Routing:} The GAT architecture models functional interactions between specialized agents and MCP tools, dynamically routing incoming tasks to the optimal LLM provider and dispatching minimal required worker agents.
+    \item \textbf{Single-Stage Preference Alignment:} The ORPO formulation unifies supervised fine-tuning with length-normalized odds ratio penalties, tuning model helpfulness and safety in a single stage without independent reward models.
+    \item \textbf{Autonomous Reactive Execution:} Runtime execution is scheduled via DAG topological sorting, iterative ReAct tool loops, rigorous odds-ratio safety gating, and live SSE streaming to browser IndexedDB storage.
+\end{enumerate}
 
 \end{document}

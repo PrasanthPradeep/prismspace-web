@@ -1,3 +1,7 @@
+/**
+ * Copyright 2026 Nobin Sijo (NobinSijo7T).
+ * SPDX-License-Identifier: Apache-2.0
+ */
 'use client';
 
 import SiriOrb from '@/components/ui/smoothui/siri-orb';
@@ -18,6 +22,36 @@ export const PROVIDER_ORB_COLORS: Record<
     c1: 'oklch(75% 0.26 35)',  // Groq Neon Orange
     c2: 'oklch(70% 0.25 15)',  // Coral
     c3: 'oklch(85% 0.22 80)',  // Yellow
+  },
+  openrouter: {
+    bg: 'oklch(14% 0.05 270)',
+    c1: 'oklch(72% 0.28 275)', // OpenRouter Electric Indigo
+    c2: 'oklch(76% 0.22 245)', // Hyper Violet
+    c3: 'oklch(80% 0.20 310)', // Cosmic Magenta
+  },
+  openai: {
+    bg: 'oklch(14% 0.05 165)',
+    c1: 'oklch(74% 0.25 165)', // OpenAI Emerald
+    c2: 'oklch(78% 0.20 190)', // Aqua
+    c3: 'oklch(70% 0.22 140)', // Mint
+  },
+  anthropic: {
+    bg: 'oklch(14% 0.05 50)',
+    c1: 'oklch(75% 0.26 50)',  // Claude Amber/Copper
+    c2: 'oklch(70% 0.22 30)',  // Terracotta
+    c3: 'oklch(80% 0.20 75)',  // Warm Gold
+  },
+  google: {
+    bg: 'oklch(14% 0.05 240)',
+    c1: 'oklch(72% 0.26 240)', // Google Blue
+    c2: 'oklch(78% 0.22 200)', // Cyan
+    c3: 'oklch(70% 0.24 280)', // Indigo
+  },
+  deepseek: {
+    bg: 'oklch(14% 0.05 255)',
+    c1: 'oklch(73% 0.27 255)', // DeepSeek Cobalt Blue
+    c2: 'oklch(78% 0.22 225)', // Sky
+    c3: 'oklch(68% 0.24 290)', // Purple
   },
 };
 

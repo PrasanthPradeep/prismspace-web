@@ -30,45 +30,45 @@ python -c "import torch; print('PyTorch:', torch.__version__); print('CUDA enabl
 Start with a small training run. It scans all supported datasets while limiting each source to 1,000 records:
 
 ```powershell
-python -m model.train --dataset-dir model\datasets --output-dir model\artifacts_test --max-rows-per-file 1000
+python -m model.train --dataset-dir model\datasets\training --output-dir model\artifacts_test --max-rows-per-file 1000
 python -m model.evaluate --output-dir model\artifacts_test
 ```
 
 Before a long run, create a detailed audit of the files and rows the trainer will retain:
 
 ```powershell
-python -m model.audit_datasets --dataset-dir model\datasets --max-rows-per-file 50000 --output model\artifacts\dataset_audit.json
+python -m model.audit_datasets --dataset-dir model\datasets\training --max-rows-per-file 50000 --output model\artifacts\dataset_audit.json
 ```
 
 After that run succeeds, start full training:
 
 ```powershell
-python -m model.train --dataset-dir model\datasets --output-dir model\artifacts --max-rows-per-file 50000
+python -m model.train --dataset-dir model\datasets\training --curated-dir model\datasets\training\curated --output-dir model\artifacts --max-rows-per-file 50000
 python -m model.evaluate --output-dir model\artifacts
 ```
 
 ## Curated approval, success, reward, and provider data
 
-The generic corpus is useful for intent and agent routing, but it must not be used to infer safety approvals, task completion, preference rewards, or the best provider from unrelated metadata. Prepare the dedicated sources below before a full run. The preparation command creates `model/datasets/curated/<target>/train.jsonl` and a separate held-out `test.jsonl`; `model.train` uses only each target's training file.
+The generic corpus is useful for intent and agent routing, but it must not be used to infer safety approvals, task completion, preference rewards, or the best provider from unrelated metadata. Prepare the dedicated sources below before a full run. Training data lives under `model/datasets/training/`, held-out test data under `model/datasets/testing/`, and validation benchmarks under `model/datasets/validation/`.
 
 ```powershell
 # Convert the downloaded source datasets into target-specific train/test files.
-python -m model.prepare_supervised_datasets --dataset-dir model\datasets --output-dir model\datasets\curated
+python -m model.prepare_supervised_datasets --dataset-dir model\datasets\training --output-dir model\datasets\training\curated
 
 # Audit the general corpus (test_datasets remains excluded).
-python -m model.audit_datasets --dataset-dir model\datasets --max-rows-per-file 50000 --output model\artifacts\dataset_audit.json
+python -m model.audit_datasets --dataset-dir model\datasets\training --max-rows-per-file 50000 --output model\artifacts\dataset_audit.json
 
 # Train general models plus the prepared approval/success targets.
-python -m model.train --dataset-dir model\datasets --curated-dir model\datasets\curated --output-dir model\artifacts --max-rows-per-file 50000
+python -m model.train --dataset-dir model\datasets\training --curated-dir model\datasets\training\curated --output-dir model\artifacts --max-rows-per-file 50000
 python -m model.evaluate --output-dir model\artifacts
 
 # Check benchmark routing coverage and regressions.
-python -m model.evaluate_holdout --dataset-dir model\datasets\test_datasets --artifacts-dir model\artifacts --output-dir model\artifacts\holdout_evaluation
+python -m model.evaluate_holdout --dataset-dir model\datasets\testing --artifacts-dir model\artifacts --output-dir model\artifacts\holdout_evaluation
 python -m unittest model.test_pipeline
 python backend\test_model_inference.py
 
 # Comprehensive model evaluation with rich CLI output.
-python -m model.evaluate_models --artifacts-dir model\artifacts --curated-dir model\datasets\curated
+python -m model.evaluate_models --artifacts-dir model\artifacts --curated-dir model\datasets\testing\curated
 ```
 
 ## Comprehensive model evaluation
@@ -91,7 +91,7 @@ python -m model.evaluate_models --export model\artifacts\my_evaluation.json
 python -m model.evaluate_models --no-colour
 
 # Custom artifact and curated directories.
-python -m model.evaluate_models --artifacts-dir model\artifacts --curated-dir model\datasets\curated
+python -m model.evaluate_models --artifacts-dir model\artifacts --curated-dir model\datasets\testing\curated
 ```
 
 The script reports pass/warn/fail verdicts per model using the deployment gates documented below. Models that fall below the minimum threshold show a yellow WARN badge; models with load errors show a red ERROR badge. The final scoreboard summarises all results. A JSON report is always written to `evaluation_report_full.json` in the artifacts directory (or at the path given by `--export`).
@@ -126,25 +126,25 @@ prismspace-web/
 Then run the supervised dataset preparation command:
 
 ```powershell
-python -m model.prepare_supervised_datasets --dataset-dir model\datasets --output-dir model\datasets\curated
+python -m model.prepare_supervised_datasets --dataset-dir model\datasets\training --output-dir model\datasets\training\curated
 ```
 
-This ingests from LMSYS Chatbot Arena and RouterBench, generates synthetic balancing samples via `model.generate_provider_seed` for Groq and NVIDIA, and creates a balanced `model/datasets/curated/provider/train.jsonl` and `test.jsonl` (350 samples per provider, 80/20 train/test split).
+This ingests from LMSYS Chatbot Arena and RouterBench, generates synthetic balancing samples via `model.generate_provider_seed` for Groq and NVIDIA, and creates training data under `model/datasets/training/curated/provider/`; held-out test data belongs under `model/datasets/testing/curated/provider/`.
 
 Then train the Provider Router model:
 
 ```powershell
-python -m model.train --dataset-dir model\datasets --output-dir model\artifacts
+python -m model.train --dataset-dir model\datasets\training --curated-dir model\datasets\training\curated --output-dir model\artifacts
 ```
 
 The reward preparation step does **not** create or deploy a reward model. Run TRL ORPO separately with a licensed base model and reserve UltraFeedback's `test_prefs` split for evaluation.
 
 Training includes every supported dataset by default, including reference documents and scientific schemas. To compare a signal-only run without Markdown, YAML, XML/XSD, LaTeX, and plain-text documents, add `--no-documents` to either training or the audit command.
 
-The `model/datasets/test_datasets/` folder is automatically excluded from training to prevent benchmark leakage. After training, generate routing predictions and coverage reports for its GAIA and SWE-bench files with:
+The `model/datasets/testing/` folder contains benchmark test data and is excluded from training. Validation benchmarks live under `model/datasets/validation/`. After training, generate routing predictions and coverage reports for GAIA and SWE-bench with:
 
 ```powershell
-python -m model.evaluate_holdout --dataset-dir model\datasets\test_datasets --artifacts-dir model\artifacts --output-dir model\artifacts\holdout_evaluation
+python -m model.evaluate_holdout --dataset-dir model\datasets\testing --artifacts-dir model\artifacts --output-dir model\artifacts\holdout_evaluation
 ```
 
 Test an exported model (provided the training report marks it as trained):
@@ -180,11 +180,11 @@ Provider-selection, runtime latency, cost, and execution success still require P
 
 For full supervised coverage, collect PrismSpace run events with `objective`, `selected_agents`, `provider`, `model`, `success`, `approval_required`, `latency_ms`, `token_cost`, `retries`, `tool_failures`, `workflow_dag`, and accepted/rejected output pairs. Suitable additions are EnvFactory-SFT-FILTERED (tool use), LiveMCPBench (MCP navigation), ScaleAI/lhaw (long-horizon workflows), Bordair multimodal (prompt-injection safeguards), and EnvFactory-RL (reward learning), subject to each dataset's licence.
 
-The backend now writes these bounded runtime events automatically to `model/datasets/prismspace_runtime_events.jsonl` at the end of each run. They are picked up by the next training command, giving provider, approval, success, latency, and agent-routing models first-party PrismSpace telemetry. Do not add that file to source control if it may contain private objectives or model outputs.
+The backend now writes these bounded runtime events automatically to `model/datasets/training/prismspace_runtime_events.jsonl` at the end of each run. They are picked up by the next training command, giving provider, approval, success, latency, and agent-routing models first-party PrismSpace telemetry. Do not add that file to source control if it may contain private objectives or model outputs.
 
 ## Dataset layout and sources
 
-Place trainable sources directly below `model/datasets/<dataset-name>/`. The trainer recursively includes supported records from those folders. Keep benchmarks and any held-out data below `model/datasets/test_datasets/<benchmark-name>/`; this directory is excluded by default from `model.train` and `model.audit_datasets`. Never pass `--include-test-datasets` for a production training run.
+Place trainable sources directly below `model/datasets/training/<dataset-name>/`. Put held-out benchmark test data under `model/datasets/testing/` and validation data under `model/datasets/validation/`. The trainer defaults to `model/datasets/training`, so benchmark data cannot leak into production training by path accident.
 
 | Local folder | Purpose | Official source |
 | --- | --- | --- |
@@ -214,3 +214,19 @@ The backend deploys only models that pass minimum validation gates. Intent and a
 `intent_classifier.joblib`, `agent_router.joblib`, `model_router.joblib`, `workflow_success_predictor.joblib`, `approval_predictor.joblib`, `latency_predictor.joblib`, `cost_predictor.joblib`, `anomaly_detector.joblib`, `workflow_templates.pkl`, and a FAISS index when FAISS is installed. `training_report.json` records exactly which outputs trained and why any were skipped.
 
 ORPO needs paired `chosen` and `rejected` samples plus a separately selected, licensed language-model checkpoint. The package detects such data and explicitly reports readiness rather than fabricating a reward checkpoint.
+
+## License and contribution boundary
+
+PrismSpace-authored model source code is copyright © 2026 Nobin Sijo
+([NobinSijo7T](https://github.com/NobinSijo7T)) and is licensed under
+[Apache-2.0](../LICENSE). This license applies only to PrismSpace-authored
+code and does not relicense third-party datasets, model weights, checkpoints,
+artifacts, or provider services.
+
+Collaborators may contribute to Dev Space tools as described in
+[CONTRIBUTING.md](../CONTRIBUTING.md). Core AI/model architecture, training,
+weights, artifacts, datasets, routing, governance, and safety behavior are
+maintainer-controlled and require prior written authorization from Nobin Sijo.
+Authorized model contributions must include provenance, version, license,
+evaluation impact, and redistribution terms. Do not commit gated datasets,
+private telemetry, API keys, or uncleared model artifacts.

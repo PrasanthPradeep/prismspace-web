@@ -1,4 +1,8 @@
 /**
+ * Copyright 2026 Nobin Sijo (NobinSijo7T).
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/**
  * lib/agent-swarm-client.ts
  * ─────────────────────────
  * Typed TypeScript client for the Agent Swarm API.
@@ -14,7 +18,14 @@ export type AgentStatus =
   | 'failed'
   | 'cancelled';
 
-export type ModelProvider = 'groq' | 'nvidia';
+export type ModelProvider =
+  | 'groq'
+  | 'nvidia'
+  | 'openai'
+  | 'anthropic'
+  | 'google'
+  | 'openrouter'
+  | 'deepseek';
 
 export interface SwarmAgent {
   id: string;
@@ -28,6 +39,12 @@ export interface SwarmAgent {
   updated_at: string;
   result: string | null;
   approved: boolean | null;
+  pending_approval?: {
+    id: string;
+    tool: string;
+    arguments: Record<string, unknown>;
+    reason: string;
+  } | null;
 }
 
 export interface AgentChatContextMessage {
@@ -66,10 +83,21 @@ export interface CreateAgentPayload {
   objective: string;
   model?: string;
   provider?: ModelProvider;
+  api_key?: string;
   max_agents?: number;
   human_in_loop?: boolean;
   chat_history?: AgentChatContextMessage[];
   user_id?: string;
+  worker_models?: Array<{ model: string; provider: ModelProvider }>;
+}
+
+export interface SwarmIntelligence {
+  intent?: string | null;
+  recommended_provider?: ModelProvider;
+  recommended_agent?: string | null;
+  recommended_workers?: number;
+  provider_confidence?: number;
+  models_loaded?: number;
 }
 
 // Per-user Gmail owner stored after OAuth callback (?gmail_user_id=...)
@@ -109,12 +137,14 @@ export async function createAgent(payload: CreateAgentPayload): Promise<SwarmAge
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       objective: payload.objective,
-      model: payload.model ?? 'gpt-4o',
-      provider: payload.provider ?? 'openai',
+      model: payload.model ?? 'nvidia/nemotron-3.5-lightning-30b-a3b',
+      provider: payload.provider ?? 'nvidia',
+      api_key: payload.api_key ?? undefined,
       max_agents: payload.max_agents ?? 3,
       human_in_loop: payload.human_in_loop ?? true,
       chat_history: payload.chat_history ?? [],
       user_id: payload.user_id ?? getGmailUserId() ?? undefined,
+      worker_models: payload.worker_models ?? undefined,
     }),
   });
   if (!res.ok) throw new Error(`Failed to create agent: ${res.status}`);
@@ -125,6 +155,12 @@ export async function getAgent(id: string): Promise<SwarmAgent> {
   const res = await fetch(`${BASE}/agents/${id}`);
   if (!res.ok) throw new Error(`Agent not found: ${id}`);
   return res.json();
+}
+
+export async function analyzeSwarmIntelligence(text: string): Promise<SwarmIntelligence> {
+  const res = await fetch(`${BASE}/intelligence?text=${encodeURIComponent(text)}`, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`Intelligence analysis failed: ${res.status}`);
+  return res.json() as Promise<SwarmIntelligence>;
 }
 
 export async function approveAgent(
@@ -143,6 +179,13 @@ export async function approveAgent(
 export async function deleteAgent(id: string): Promise<void> {
   const res = await fetch(`${BASE}/agents/${id}`, { method: 'DELETE' });
   if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
+}
+
+export async function cancelAgentOperation(id: string): Promise<boolean> {
+  const res = await fetch(`${BASE}/agents/${id}/cancel-operation`, { method: 'POST' });
+  if (!res.ok) throw new Error(`Operation cancellation failed: ${res.status}`);
+  const data = await res.json();
+  return Boolean(data.cancelled);
 }
 
 // ── MCP server/token management ─────────────────────────────────────────────

@@ -1,6 +1,8 @@
+# Copyright 2026 Nobin Sijo (NobinSijo7T).
+# SPDX-License-Identifier: Apache-2.0
 from pathlib import Path
 from model.dataset_loader import DatasetLoader
-frame = DatasetLoader(Path('model/datasets'), 5000, exclude_test_datasets=True).load()
+frame = DatasetLoader(Path('model/datasets/training'), 5000, exclude_test_datasets=True).load()
 
 print('=== INTENT (top 15) ===')
 print(frame['_intent_label'].value_counts().head(15).to_string())

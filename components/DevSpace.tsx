@@ -1,9 +1,22 @@
+/**
+ * Copyright 2026 Nobin Sijo (NobinSijo7T).
+ * SPDX-License-Identifier: Apache-2.0
+ */
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
+import Link from 'next/link';
 import CardFlip from './kokonutui/card-flip';
+import {
+  WebScraperIcon,
+  ColorGenIcon,
+  PomodoroIcon,
+  SQLIcon,
+  BookmarkIcon,
+  AgentSwarmIcon,
+} from './tools/ToolIcons';
 
 interface Tool {
-  icon: string;
+  icon: React.ReactNode;
   title: string;
   desc: string;
   action?: string;
@@ -13,20 +26,7 @@ interface Tool {
 
 const tools: Tool[] = [
   {
-    icon: '🐙',
-    title: 'Git Reference',
-    desc: 'Cheat sheet, builder, scenarios',
-    action: 'git-reference',
-    uses: [
-      'Quick command reference',
-      'Build complex git commands',
-      'Learn common scenarios',
-      'Master git workflows'
-    ]
-  },
-
-  {
-    icon: '🎨',
+    icon: <ColorGenIcon size={64} glow />,
     title: 'Color Gen',
     desc: 'Interactive color palette generator',
     action: 'color-gen',
@@ -38,19 +38,7 @@ const tools: Tool[] = [
     ]
   },
   {
-    icon: '📱',
-    title: 'QR Code Generator',
-    desc: 'Create custom QR codes for URLs, WiFi, vCards, and more',
-    action: 'qr-generator',
-    uses: [
-      'Generate QR codes',
-      'WiFi network sharing',
-      'Contact cards (vCard)',
-      'Customize colors & size'
-    ]
-  },
-  {
-    icon: '🧾',
+    icon: <WebScraperIcon size={64} glow />,
     title: 'Web Scraper',
     desc: 'Paste a link and export clean JSON or CSV',
     action: 'web-scraper',
@@ -61,9 +49,8 @@ const tools: Tool[] = [
       'Download JSON or CSV'
     ]
   },
-
   {
-    icon: '⏱️',
+    icon: <PomodoroIcon size={64} glow />,
     title: 'Pomodoro Timer',
     desc: 'Animated focus countdown with Number Flow',
     action: 'pomodoro-timer',
@@ -75,7 +62,7 @@ const tools: Tool[] = [
     ]
   },
   {
-    icon: '🗄️',
+    icon: <SQLIcon size={64} glow />,
     title: 'SQL Playground',
     desc: 'In-browser SQLite editor powered by WASM',
     action: 'sql-playground',
@@ -87,7 +74,7 @@ const tools: Tool[] = [
     ]
   },
   {
-    icon: '🔖',
+    icon: <BookmarkIcon size={64} glow />,
     title: 'Bookmark Manager',
     desc: 'Save, tag, search, import, export, and track visits',
     href: '/dev-space/bookmark-canvas',
@@ -99,7 +86,7 @@ const tools: Tool[] = [
     ]
   },
   {
-    icon: '🐝',
+    icon: <AgentSwarmIcon size={64} glow />,
     title: 'Agent Swarm',
     desc: 'Orchestrate multiple AI agents on a single task',
     action: 'agent-swarm',
@@ -110,7 +97,6 @@ const tools: Tool[] = [
       'Inspect per-agent logs'
     ]
   },
-
 ];
 
 interface DevSpaceProps {
@@ -184,9 +170,9 @@ export function DevSpace({ onToolAction }: DevSpaceProps) {
         transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
       >
         <div className="cutout-box">
-          <span className="cutout-text text-[2.5rem]">
+          <h2 className="cutout-text text-[2.5rem]">
             dev space.
-          </span>
+          </h2>
         </div>
       </motion.div>
 
@@ -198,16 +184,8 @@ export function DevSpace({ onToolAction }: DevSpaceProps) {
         whileInView="visible"
         viewport={{ once: true, margin: "-100px" }}
       >
-        {tools.map((tool, index) => (
-          <motion.div
-            key={index}
-            onClick={() => handleCardClick(tool)}
-            className="cursor-pointer w-full flex justify-center"
-            variants={cardVariants}
-            layout
-            whileHover={{ y: -4 }}
-            transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-          >
+        {tools.map((tool, index) => {
+          const card = (
             <CardFlip
               icon={tool.icon}
               title={tool.title}
@@ -220,8 +198,36 @@ export function DevSpace({ onToolAction }: DevSpaceProps) {
                 'Feature 4'
               ]}
             />
-          </motion.div>
-        ))}
+          );
+
+          return tool.href ? (
+            <motion.div
+              key={index}
+              className="w-full flex justify-center"
+              variants={cardVariants}
+              layout
+              whileHover={{ y: -4 }}
+              transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+            >
+              <Link href={tool.href} className="block w-full" aria-label={`Open ${tool.title}`}>
+                {card}
+              </Link>
+            </motion.div>
+          ) : (
+            <motion.button
+              key={index}
+              type="button"
+              onClick={() => handleCardClick(tool)}
+              className="cursor-pointer w-full flex justify-center border-0 bg-transparent p-0 text-left"
+              variants={cardVariants}
+              layout
+              whileHover={{ y: -4 }}
+              transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+            >
+              {card}
+            </motion.button>
+          );
+        })}
       </motion.div>
     </div>
   );

@@ -1,3 +1,7 @@
+/**
+ * Copyright 2026 Nobin Sijo (NobinSijo7T).
+ * SPDX-License-Identifier: Apache-2.0
+ */
 'use client';
 
 import {
@@ -10,23 +14,45 @@ import {
 import { AnimatePresence } from 'motion/react';
 import { Toaster } from 'react-hot-toast';
 import toast from 'react-hot-toast';
+import {
+  MousePointer2,
+  Move,
+  Plus,
+  Star,
+  Maximize2,
+  FileDown,
+  Upload,
+  Lock,
+  Edit2,
+  Palette,
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { BookmarkCard } from './BookmarkCard';
 import { BookmarkModal } from './BookmarkModal';
 import { ContextMenu } from './ContextMenu';
+import { CanvasBgModal } from './CanvasBgModal';
 import { Toolbar } from './Toolbar';
+import { Toolbar as KokonutToolbar, type ToolbarItem } from '@/components/kokonutui/toolbar';
+import { BookmarkIcon } from '@/components/tools/ToolIcons';
 import { useBookmarks } from '@/hooks/bookmark-canvas/useBookmarks';
 import { useCanvas } from '@/hooks/bookmark-canvas/useCanvas';
 import { useKeyboardShortcuts } from '@/hooks/bookmark-canvas/useKeyboardShortcuts';
 import type { Bookmark, BookmarkFormData, ContextMenuState } from '@/lib/bookmark-canvas/types';
+import { DEFAULT_CANVAS_BG, isLightColor } from '@/lib/bookmark-canvas/types';
 import { copyToClipboard } from '@/lib/bookmark-canvas/utils';
 
 export function BookmarkCanvas() {
   const canvasRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const dropPositionRef = useRef<{ x: number; y: number } | undefined>(undefined);
 
   // State
+  const [activeTool, setActiveTool] = useState<'select' | 'pan'>('select');
+  const [isLocked, setIsLocked] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
+  const [bgModalOpen, setBgModalOpen] = useState(false);
+  const [backgroundColor, setBackgroundColor] = useState<string>(DEFAULT_CANVAS_BG);
   const [editingBookmark, setEditingBookmark] = useState<Bookmark | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState>({
     visible: false,
@@ -34,6 +60,29 @@ export function BookmarkCanvas() {
     y: 0,
     bookmarkId: null,
   });
+
+  // Load persisted background color on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('prism-bookmark-canvas-bg');
+      if (saved) {
+        setBackgroundColor(saved);
+      }
+    } catch {
+      // ignore localStorage errors
+    }
+  }, []);
+
+  const handleBgChange = useCallback((color: string) => {
+    setBackgroundColor(color);
+    try {
+      localStorage.setItem('prism-bookmark-canvas-bg', color);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const isLight = useMemo(() => isLightColor(backgroundColor), [backgroundColor]);
 
   // Hooks
   const {
@@ -63,7 +112,22 @@ export function BookmarkCanvas() {
     importFromJson,
   } = useBookmarks();
 
-  const { camera, zoomIn, zoomOut, resetZoom } = useCanvas(canvasRef);
+  const { camera, zoomIn, zoomOut, resetZoom } = useCanvas(canvasRef, activeTool === 'pan');
+
+  const favoritesCount = useMemo(() => {
+    return allBookmarks.filter((b) => b.favorite).length;
+  }, [allBookmarks]);
+
+  const handleToolbarFileChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+        importFromJson(file);
+        e.target.value = '';
+      }
+    },
+    [importFromJson]
+  );
 
   // ── Helpers ────────────────────────────────────────────────────
 
@@ -78,6 +142,61 @@ export function BookmarkCanvas() {
     dropPositionRef.current = undefined;
     setModalOpen(true);
   }, []);
+
+  const kokonutToolbarItems: ToolbarItem[] = useMemo(
+    () => [
+      {
+        id: 'select',
+        title: 'Select',
+        icon: MousePointer2,
+        onClick: () => setActiveTool('select'),
+      },
+      {
+        id: 'pan',
+        title: 'Pan',
+        icon: Move,
+        onClick: () => setActiveTool('pan'),
+      },
+      {
+        id: 'add',
+        title: 'Add',
+        icon: Plus,
+        onClick: () => openAddModal(),
+      },
+      {
+        id: 'favorites',
+        title: 'Favorites',
+        icon: Star,
+        badge: favoritesCount > 0 ? favoritesCount : undefined,
+        onClick: () => setShowFavoritesOnly((prev) => !prev),
+      },
+      {
+        id: 'theme',
+        title: 'Theme',
+        icon: Palette,
+        onClick: () => setBgModalOpen(true),
+      },
+      {
+        id: 'fit',
+        title: 'Fit',
+        icon: Maximize2,
+        onClick: resetZoom,
+      },
+      {
+        id: 'export',
+        title: 'Export',
+        icon: FileDown,
+        onClick: exportToJson,
+      },
+      {
+        id: 'import',
+        title: 'Import',
+        icon: Upload,
+        onClick: () => fileInputRef.current?.click(),
+      },
+    ],
+    [favoritesCount, openAddModal, resetZoom, exportToJson, setShowFavoritesOnly]
+  );
 
   const closeModal = useCallback(() => {
     setModalOpen(false);
@@ -262,14 +381,16 @@ export function BookmarkCanvas() {
         position="bottom-center"
         toastOptions={{
           style: {
-            background: 'oklch(0.18 0.015 270)',
-            color: 'white',
-            border: '1px solid oklch(1 0 0 / 10%)',
+            background: 'rgba(9, 12, 18, 0.92)',
+            color: '#ffffff',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
             borderRadius: '12px',
             fontSize: '13px',
+            fontFamily: 'Space Grotesk, sans-serif',
+            fontWeight: 600,
           },
           success: {
-            iconTheme: { primary: '#8b5cf6', secondary: 'white' },
+            iconTheme: { primary: '#00df81', secondary: '#000000' },
           },
         }}
       />
@@ -293,16 +414,19 @@ export function BookmarkCanvas() {
         onResetZoom={resetZoom}
         totalCount={allBookmarks.length}
         filteredCount={filteredBookmarks.length}
+        backgroundColor={backgroundColor}
+        onOpenBgPicker={() => setBgModalOpen(true)}
       />
 
       {/* Canvas wrapper */}
       <div
         ref={canvasRef}
-        className="fixed inset-0 overflow-hidden"
+        className={cn(
+          "fixed inset-0 overflow-hidden",
+          activeTool === 'pan' ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'
+        )}
         style={{
-          top: '56px',
-          background: 'oklch(0.1 0.012 270)',
-          cursor: 'default',
+          background: backgroundColor,
         }}
         onClick={handleCanvasClick}
         onDoubleClick={handleCanvasDoubleClick}
@@ -310,7 +434,7 @@ export function BookmarkCanvas() {
         {/* Dot grid background */}
         <svg
           className="absolute inset-0 w-full h-full pointer-events-none"
-          style={{ opacity: 0.4 }}
+          style={{ opacity: isLight ? 0.35 : 0.22 }}
           aria-hidden
         >
           <defs>
@@ -325,8 +449,8 @@ export function BookmarkCanvas() {
               <circle
                 cx={1}
                 cy={1}
-                r={1}
-                fill="oklch(1 0 0 / 30%)"
+                r={1.2}
+                fill={isLight ? "rgba(0, 0, 0, 0.45)" : "rgba(255, 255, 255, 0.35)"}
               />
             </pattern>
           </defs>
@@ -352,6 +476,8 @@ export function BookmarkCanvas() {
                 bookmark={bm}
                 isSelected={selectedId === bm.id}
                 scale={camera.scale}
+                isLocked={isLocked}
+                isPanMode={activeTool === 'pan'}
                 onSelect={setSelectedId}
                 onDoubleClick={handleCardDoubleClick}
                 onDragStop={updatePosition}
@@ -368,12 +494,40 @@ export function BookmarkCanvas() {
         {isEmpty && (
           <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none">
             <div className="text-center space-y-4">
-              <div className="text-6xl opacity-20">🔖</div>
+              <div className="flex justify-center opacity-30">
+                <BookmarkIcon size={56} glow />
+              </div>
               <div>
-                <p className="text-white/30 text-lg font-medium">Your canvas is empty</p>
-                <p className="text-white/20 text-sm mt-1">
+                <p 
+                  className="text-lg font-medium"
+                  style={{
+                    fontFamily: 'Space Grotesk, sans-serif',
+                    color: isLight ? '#0f172a' : '#ffffff',
+                    fontWeight: 700,
+                  }}
+                >
+                  Your canvas is empty
+                </p>
+                <p 
+                  className="text-sm mt-1"
+                  style={{
+                    fontFamily: 'Space Grotesk, sans-serif',
+                    color: isLight ? '#475569' : 'rgba(255, 255, 255, 0.6)',
+                    fontWeight: 600,
+                  }}
+                >
                   Press{' '}
-                  <kbd className="px-1.5 py-0.5 rounded text-xs bg-white/10 text-white/40">Ctrl+N</kbd>
+                  <kbd 
+                    className="px-1.5 py-0.5 rounded text-xs"
+                    style={{
+                      background: isLight ? 'rgba(0, 0, 0, 0.08)' : 'rgba(255, 255, 255, 0.15)',
+                      color: isLight ? '#0f172a' : '#ffffff',
+                      fontFamily: 'JetBrains Mono, monospace',
+                      fontWeight: 700,
+                    }}
+                  >
+                    Ctrl+N
+                  </kbd>
                   {' '}or double-click anywhere to add a bookmark
                 </p>
               </div>
@@ -382,11 +536,65 @@ export function BookmarkCanvas() {
         )}
 
         {/* Hint strip */}
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 pointer-events-none">
-          <p className="text-white/15 text-xs text-center">
-            Scroll to zoom · Space+drag to pan · Double-click canvas to add
+        <div className="absolute bottom-24 left-1/2 -translate-x-1/2 pointer-events-none z-10 hidden sm:block">
+          <p 
+            className="text-xs text-center px-3.5 py-1 rounded-full bg-black/50 backdrop-blur-md border border-white/10"
+            style={{
+              fontFamily: 'JetBrains Mono, monospace',
+              color: '#ffffff',
+              opacity: 0.85,
+              fontWeight: 600,
+            }}
+          >
+            {activeTool === 'pan'
+              ? '🖐️ Pan Mode: Drag canvas to navigate'
+              : isLocked
+              ? '🔒 Canvas Locked: Layout is protected from edits'
+              : 'Scroll to zoom · Space+drag to pan · Double-click canvas to add'}
           </p>
         </div>
+      </div>
+
+      {/* Floating KokonutUI Canvas Toolbar Dock */}
+      <div className="fixed bottom-5 sm:bottom-6 left-1/2 -translate-x-1/2 z-[100] max-w-[calc(100%-2rem)]">
+        <KokonutToolbar
+          items={kokonutToolbarItems}
+          selected={showFavoritesOnly ? 'favorites' : activeTool}
+          onSelect={(id) => {
+            if (id === 'select' || id === 'pan') {
+              setActiveTool(id);
+            }
+          }}
+          showToggle={true}
+          isToggled={!isLocked}
+          onToggleChange={(toggled) => {
+            const nextLocked = !toggled;
+            setIsLocked(nextLocked);
+            toast(nextLocked ? '🔒 Canvas locked (Protected)' : '✏️ Canvas unlocked (Edit mode)', {
+              icon: nextLocked ? '🔒' : '✏️',
+            });
+          }}
+          toggleLabels={{ on: 'Edit', off: 'Locked' }}
+          toggleIcons={{ on: Edit2, off: Lock }}
+          notificationMessage={(item) => {
+            if (item.id === 'select') return 'Select mode';
+            if (item.id === 'pan') return 'Pan mode: drag canvas';
+            if (item.id === 'add') return 'New bookmark';
+            if (item.id === 'favorites') return showFavoritesOnly ? 'Showing all' : 'Showing favorites';
+            if (item.id === 'theme') return 'Canvas background';
+            if (item.id === 'fit') return 'Centered 100%';
+            if (item.id === 'export') return 'Exported JSON';
+            if (item.id === 'import') return 'Import JSON';
+            return item.title;
+          }}
+        />
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".json"
+          className="hidden"
+          onChange={handleToolbarFileChange}
+        />
       </div>
 
       {/* Modals & Overlays */}
@@ -397,6 +605,13 @@ export function BookmarkCanvas() {
         dropPosition={dropPositionRef.current}
         onConfirm={handleModalConfirm}
         onClose={closeModal}
+      />
+
+      <CanvasBgModal
+        isOpen={bgModalOpen}
+        onClose={() => setBgModalOpen(false)}
+        currentColor={backgroundColor}
+        onSelectColor={handleBgChange}
       />
 
       <ContextMenu

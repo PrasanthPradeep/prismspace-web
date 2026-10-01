@@ -1,3 +1,7 @@
+/**
+ * Copyright 2026 Nobin Sijo (NobinSijo7T).
+ * SPDX-License-Identifier: Apache-2.0
+ */
 // components/DataBackup.tsx
 'use client';
 
@@ -10,6 +14,8 @@ import {
   validateBackupFile,
   type ImportResult
 } from '@/lib/db-export';
+import { GradientButton } from '@/components/kokonutui/gradient-button';
+import { CosmicButton } from '@/components/ui/cosmic-button';
 
 export function DataBackup() {
   const [isExporting, setIsExporting] = useState(false);
@@ -171,26 +177,26 @@ export function DataBackup() {
       )}
 
       {!stats && (
-        <button
+        <CosmicButton
+          as="button"
           onClick={loadStats}
-          className="mb-6 px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm hover:bg-white/10 transition-colors"
+          className="mb-6"
         >
           Load Statistics
-        </button>
+        </CosmicButton>
       )}
 
       {/* Action Buttons */}
       <div className="space-y-3 mb-6">
-        <button
+        <GradientButton
           onClick={handleExport}
+          loading={isExporting}
           disabled={isExporting}
-          className="w-full px-6 py-3 rounded-xl font-semibold text-white transition-all
-                     bg-gradient-to-r from-green-500/20 to-emerald-500/20
-                     border border-green-500/30 hover:border-green-500/50
-                     disabled:opacity-50 disabled:cursor-not-allowed"
+          variant="emerald"
+          className="w-full h-12 text-sm font-semibold"
         >
-          {isExporting ? '⏳ Exporting...' : '📥 Export All Data'}
-        </button>
+          {isExporting ? 'Exporting...' : '📥 Export All Data'}
+        </GradientButton>
 
         <div className="relative">
           <input
@@ -199,29 +205,25 @@ export function DataBackup() {
             accept=".json,application/json"
             onChange={handleImport}
             disabled={isImporting}
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed z-10"
           />
-          <button
+          <GradientButton
+            loading={isImporting}
             disabled={isImporting}
-            className="w-full px-6 py-3 rounded-xl font-semibold text-white transition-all
-                       bg-gradient-to-r from-blue-500/20 to-cyan-500/20
-                       border border-blue-500/30 hover:border-blue-500/50
-                       disabled:opacity-50 disabled:cursor-not-allowed"
+            variant="emerald"
+            className="w-full h-12 text-sm font-semibold"
           >
-            {isImporting ? '⏳ Importing...' : '📤 Import from Backup'}
-          </button>
+            {isImporting ? 'Importing...' : '📤 Import from Backup'}
+          </GradientButton>
         </div>
 
-        <button
+        <CosmicButton
+          as="button"
           onClick={handleClearData}
-          className={`w-full px-6 py-3 rounded-xl font-semibold text-white transition-all
-                     ${showConfirmClear 
-                       ? 'bg-gradient-to-r from-red-600/30 to-red-700/30 border-2 border-red-500/70 animate-pulse' 
-                       : 'bg-gradient-to-r from-red-500/20 to-red-600/20 border border-red-500/30 hover:border-red-500/50'
-                     }`}
+          className="w-full"
         >
           {showConfirmClear ? '⚠️ Click Again to Confirm DELETE' : '🗑️ Clear All Data'}
-        </button>
+        </CosmicButton>
       </div>
 
       {/* Message Display */}

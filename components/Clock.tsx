@@ -1,14 +1,18 @@
+/**
+ * Copyright 2026 Nobin Sijo (NobinSijo7T).
+ * SPDX-License-Identifier: Apache-2.0
+ */
 'use client';
 
 import { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion } from 'motion/react';
 
 export type ClockStyle = 'default' | 'minimal' | 'serif' | 'handwritten' | 'minimal-light' | 
   'serif-condensed' | 'bitcount' | 'corpta' | 'fenotype' | 'nclkemgor' | 
   'westiva' | 'ammonite' | 'crude' | 'zombiess' | 'xolonium' | 'nemoy';
 
 export const clockStyleClasses: Record<ClockStyle, string> = {
-  default: 'font-sans font-black tracking-[-0.05em]',
+  default: 'font-sans font-black tracking-[-0.06em]',  // -0.06em: optically correct at 12rem display scale
   minimal: 'font-sans font-light tracking-[0.1em]',
   serif: 'font-serif font-normal tracking-tight',
   handwritten: 'font-permanentMarker font-normal rotate-[-1deg] tracking-wide',
@@ -72,17 +76,23 @@ export function Clock() {
   return (
     <motion.div 
       className={`text-[12rem] cursor-pointer transition-colors duration-300 leading-none
-                  hover:scale-[1.02] ${styleClass}`}
+                  ${styleClass}`}
       style={{ 
         color: clockColor,
         textShadow: clockColor === '#000000' 
           ? '0 4px 30px rgba(255, 255, 255, 0.2)' 
           : '0 4px 25px rgba(0, 0, 0, 0.7), 0 0 50px rgba(0, 0, 0, 0.4)',
-        transition: 'transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), color 0.3s ease',
+        transformOrigin: 'center',
+        willChange: 'transform',
       }}
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1], delay: 0.1 }}
+      whileHover={{ scale: 1.02 }}
+      whileTap={{ scale: 0.995 }}
+      transition={{
+        opacity: { duration: 0.8, ease: [0.16, 1, 0.3, 1], delay: 0.1 },
+        scale: { duration: 0.18, ease: [0.16, 1, 0.3, 1] },
+      }}
     >
       {time || '00:00'}
     </motion.div>

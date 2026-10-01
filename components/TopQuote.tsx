@@ -1,7 +1,11 @@
+/**
+ * Copyright 2026 Nobin Sijo (NobinSijo7T).
+ * SPDX-License-Identifier: Apache-2.0
+ */
 'use client';
 
 import { useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 
 const quotes = [
   { quote: "Innovation distinguishes between a leader and a follower.", author: "Steve Jobs" },
@@ -36,7 +40,7 @@ export function TopQuote() {
   return (
     <AnimatePresence>
       <motion.div
-        className="fixed top-[40px] right-[40px] max-w-[380px] text-right z-[100]"
+        className="fixed top-[72px] right-[40px] max-w-[380px] text-right z-[100]"
         initial={{ opacity: 0, x: 20 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ duration: 0.7, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}

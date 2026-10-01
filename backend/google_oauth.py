@@ -1,3 +1,5 @@
+# Copyright 2026 Nobin Sijo (NobinSijo7T).
+# SPDX-License-Identifier: Apache-2.0
 """
 Per-user Gmail OAuth store for PrismSpace Hive Bridge.
 - One Google OAuth client (yours), many users (their Gmail).

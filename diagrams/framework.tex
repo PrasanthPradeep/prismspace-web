@@ -1,9 +1,12 @@
+% Copyright 2026 Nobin Sijo (NobinSijo7T).
+% SPDX-License-Identifier: Apache-2.0
 \documentclass[10pt,a4paper]{article}
 \usepackage[margin=0.5in]{geometry}
 \usepackage{amsmath,amssymb}
 \usepackage{tikz}
 \usetikzlibrary{shapes.geometric,arrows.meta,positioning,calc,fit,backgrounds}
 \usepackage{times}
+\usepackage{pifont}
 
 \pagestyle{empty}
 
@@ -82,19 +85,19 @@
     }
 ]
 
+
+
     % =========================================================================
-    % TOP-LEFT PANEL: DATASET INGESTION & PREPROCESSING
+    % TOP-LEFT PANEL: DATASET INGESTION & PREPROCESSING (TRAINING PHASE)
     % =========================================================================
     
-    % Left-side vertical pipeline in Top-Left
-    \node [box, minimum width=2.3cm, minimum height=0.6cm] (ds) at (-4.5, 5.2) {\textbf{Datasets}};
-    \node [box, minimum width=2.3cm, minimum height=0.6cm, below=0.35cm of ds] (loader) {\textbf{DatasetLoader}};
-    \node [box, minimum width=2.3cm, minimum height=0.65cm, below=0.35cm of loader] (raw_feat) {Raw Request\\Features};
-    \node [box, minimum width=2.3cm, minimum height=0.65cm, below=0.35cm of raw_feat] (pop_feat) {Telemetry \&\\Benchmark Trace};
-    \node [box, minimum width=2.3cm, minimum height=0.65cm, below=0.35cm of pop_feat] (sim_const) {Construction of\\Swarm Graph};
+    % Left-side vertical pipeline in Top-Left (DatasetLoader REMOVED)
+    \node [box, minimum width=2.4cm, minimum height=0.72cm] (ds) at (-4.5, 4.95) {\textbf{[TRAINING INPUT]}\\\textbf{Curated Datasets}};
+    \node [box, minimum width=2.4cm, minimum height=0.72cm] (raw_feat) at (-4.5, 3.70) {Raw Request\\Features};
+    \node [box, minimum width=2.4cm, minimum height=0.72cm] (pop_feat) at (-4.5, 2.40) {Telemetry \&\\Benchmark Trace};
+    \node [box, minimum width=2.4cm, minimum height=0.72cm] (sim_const) at (-4.5, 1.10) {\textbf{[TRAINED GRAPH]}\\Construction of\\Swarm Graph};
 
-    \draw [arrow] (ds) -- (loader);
-    \draw [arrow] (loader) -- (raw_feat);
+    \draw [arrow] (ds) -- (raw_feat);
     \draw [arrow] (raw_feat) -- (pop_feat);
     \draw [arrow] (pop_feat) -- (sim_const);
 
@@ -123,8 +126,11 @@
     \draw [arrow] (raw_feat.east) -- ++(0.22, 0) |- (prep_box.west);
     \draw [arrow] (pop_feat.east) -- ++(0.22, 0) |- (feat_box.west);
 
-    % Top-left container boundary
+    % Top-left container boundary with prominent title annotation badge
     \node [dashed_container, fit=(ds) (sim_const) (prep_box) (feat_box), inner sep=0.25cm] (container_topleft) {};
+    \node [anchor=south west, font=\fontsize{6.0}{7.0}\selectfont\bfseries, fill=white, draw=black!75, line width=0.6pt, rounded corners=2pt, inner xsep=4pt, inner ysep=2pt] (badge_topleft) at ($(container_topleft.north west)+(0.25, 0)$) {
+        [TRAINING PHASE] Offline Dataset Preprocessing \& Feature Engineering
+    };
 
     % Node styles for expanded Swarm Graph
     \tikzset{
@@ -197,30 +203,36 @@
     \node [swarm_node, minimum width=1.35cm, font=\tiny\bfseries] at (-0.25, -1.05) {Worker Agent};
     \node [tool_node, minimum width=1.35cm, font=\tiny] at (1.25, -1.05) {MCP Tool};
 
-    % Top Swarm Topological Nodes (Strictly non-overlapping positions)
-    \node [super_node, font=\tiny\bfseries, inner sep=2.5pt] (s_super) at (-0.25, -1.72) {Supervisor (Hub)};
-    \node [swarm_node, font=\tiny\bfseries, inner sep=2pt] (w_plan)  at (-1.75, -1.55) {Planner};
-    \node [swarm_node, font=\tiny\bfseries, inner sep=2pt] (w_brow)  at (-1.85, -2.35) {Browser};
-    \node [swarm_node, font=\tiny\bfseries, inner sep=2pt] (w_res)   at (-1.05, -2.35) {Research};
-    \node [swarm_node, font=\tiny\bfseries, inner sep=2pt] (w_fs)    at (-0.25, -2.35) {Filesystem};
-    \node [swarm_node, font=\tiny\bfseries, inner sep=2pt] (w_code)  at (1.05, -1.55)  {Coding};
-    \node [swarm_node, font=\tiny\bfseries, inner sep=2pt] (w_git)   at (1.05, -2.35)  {GitHub};
-    \node [swarm_node, font=\tiny\bfseries, inner sep=2pt] (w_val)   at (2.05, -1.55)  {Validator};
-    \node [tool_node, font=\tiny, inner sep=2pt]  (t_mcp)   at (2.05, -2.35)  {MCP Tools};
+    % Top Swarm Topological Nodes (Symmetrically spaced, zero-overlap 3-tier constellation)
+    % Tier 1 (Agents): Planner, Research, Coding, Validator
+    \node [swarm_node, font=\tiny\bfseries, inner sep=2pt] (w_plan)  at (-1.90, -1.48) {Planner};
+    \node [swarm_node, font=\tiny\bfseries, inner sep=2pt] (w_res)   at (-0.80, -1.48) {Research};
+    \node [swarm_node, font=\tiny\bfseries, inner sep=2pt] (w_code)  at (0.30, -1.48)  {Coding};
+    \node [swarm_node, font=\tiny\bfseries, inner sep=2pt] (w_val)   at (1.40, -1.48)  {Validator};
 
-    % Mesh Interconnections
+    % Tier 2 (Central Hub): Supervisor
+    \node [super_node, font=\tiny\bfseries, inner sep=2.5pt] (s_super) at (-0.25, -2.00) {Supervisor (Hub)};
+
+    % Tier 3 (MCP Tools): Browser, Filesystem, GitHub, MCP Tools
+    \node [tool_node, font=\tiny, inner sep=2pt] (w_brow)  at (-1.90, -2.52) {Browser};
+    \node [tool_node, font=\tiny, inner sep=2pt] (w_fs)    at (-0.80, -2.52) {Filesystem};
+    \node [tool_node, font=\tiny, inner sep=2pt] (w_git)   at (0.35, -2.52)  {GitHub};
+    \node [tool_node, font=\tiny, inner sep=2pt] (t_mcp)   at (1.45, -2.52)  {MCP Tools};
+
+    % Mesh Interconnections (Clean routing with no line cutting through any node)
     \draw [draw=black!55, line width=0.5pt] (s_super) -- (w_plan);
-    \draw [draw=black!55, line width=0.5pt] (s_super) -- (w_code);
     \draw [draw=black!55, line width=0.5pt] (s_super) -- (w_res);
-    \draw [draw=black!55, line width=0.5pt] (s_super) -- (w_fs);
+    \draw [draw=black!55, line width=0.5pt] (s_super) -- (w_code);
     \draw [draw=black!55, line width=0.5pt] (s_super) -- (w_val);
+    \draw [draw=black!55, line width=0.5pt] (s_super) -- (w_fs);
+    \draw [draw=black!55, line width=0.5pt] (s_super) -- (w_git);
     \draw [draw=black!55, line width=0.5pt] (w_plan) -- (w_brow);
-    \draw [draw=black!55, line width=0.5pt] (w_brow) -- (w_res);
-    \draw [draw=black!55, line width=0.5pt] (w_code) -- (w_git);
+    \draw [draw=black!55, line width=0.5pt] (w_res) -- (w_brow);
     \draw [draw=black!55, line width=0.5pt] (w_code) -- (w_val);
     \draw [draw=black!55, line width=0.5pt] (w_code) -- (t_mcp);
+    \draw [draw=black!55, line width=0.5pt] (w_val) -- (t_mcp);
     \draw [draw=black!55, line width=0.5pt] (w_git) -- (t_mcp);
-    \draw [draw=black!55, line width=0.5pt] (w_fs) -- (t_mcp);
+    \draw [draw=black!55, line width=0.5pt] (w_fs) -- (w_git);
 
     % Bottom Graph visual area: Active Collaboration DAG (EXPANDED)
     \node [box, fill=white, minimum width=5.7cm, minimum height=2.85cm] (graph_box_bot) at (-0.25, -4.825) {};
@@ -228,13 +240,13 @@
     \node [font=\fontsize{4.8}{5.8}\selectfont\itshape, text=black!70] at (-0.25, -4.02) {Decomposition $\longrightarrow$ Parallel Execution $\longrightarrow$ Validation $\longrightarrow$ Delivery};
 
     % Active DAG Workflow Nodes (Symmetrically spaced, clean vertical layers, zero overlaps)
-    \node [box, fill=black!8, font=\tiny\bfseries, inner sep=2pt, minimum width=0.88cm] (d_req) at (-2.45, -5.15) {User Task\\\& Scope};
+    \node [box, fill=black!8, font=\fontsize{4.8}{5.8}\selectfont\bfseries, inner sep=2pt, minimum width=1.1cm] (d_req) at (-2.45, -5.15) {\textbf{[TASK INPUT]}\\User Task\\\& Scope};
     \node [super_node, font=\tiny\bfseries, inner sep=2pt, minimum width=0.88cm] (d_lead) at (-1.35, -5.15) {Supervisor\\Planner};
     \node [swarm_node, font=\tiny\bfseries, inner sep=2pt, minimum width=0.88cm] (d_res)  at (-0.25, -4.62) {Research\\Agent};
     \node [swarm_node, font=\tiny\bfseries, inner sep=2pt, minimum width=0.88cm] (d_code) at (-0.25, -5.68) {Coding\\Agent};
     \node [super_node, font=\tiny\bfseries, inner sep=2pt, minimum width=0.88cm] (d_gate) at (0.85, -4.62) {Safety \&\\Policy Gate};
     \node [tool_node, font=\tiny, inner sep=2pt, minimum width=0.88cm] (d_tool) at (0.85, -5.68) {MCP Tool\\Execution};
-    \node [box, fill=black!16, font=\tiny\bfseries, inner sep=2pt, minimum width=0.88cm] (d_out) at (1.95, -5.15) {Verified\\Delivery};
+    \node [box, fill=black!16, font=\fontsize{4.8}{5.8}\selectfont\bfseries, inner sep=2pt, minimum width=1.1cm] (d_out) at (1.95, -5.15) {\textbf{[DELIVERY]}\\Verified\\Output};
 
     % Active Directed Workflow Connections
     \draw [-{Stealth[scale=0.6]}, line width=0.6pt, black!85] (d_req) -- (d_lead);
@@ -247,6 +259,9 @@
 
     % Bottom-left container boundary
     \node [dashed_container, fit=(sim_graph_lbl) (eval_lbl) (graph_box_top) (graph_box_bot), inner sep=0.25cm] (container_botleft) {};
+    \node [anchor=south west, font=\fontsize{6.0}{7.0}\selectfont\bfseries, fill=white, draw=black!75, line width=0.6pt, rounded corners=2pt, inner xsep=4pt, inner ysep=2pt] (badge_botleft) at ($(container_botleft.north west)+(0.25, 0)$) {
+        [BACKEND: RUNTIME] Multi-Agent Swarm Orchestration \& Execution
+    };
 
     % =========================================================================
     % RIGHT PANEL: ML ROUTING & PLANNING PIPELINE
@@ -258,7 +273,7 @@
     };
 
     \node [box, fill=white, text width=4.8cm, minimum height=0.82cm] (eval_box) at (6.3, 4.25) {
-        \textbf{Evaluation Metrics}\\[0.15em]
+        \textbf{Evaluation Metrics}\\
         {\scriptsize
         \begin{tabular}{@{}c@{\hspace{0.5em}}c@{}}
         \fbox{\strut Acc / Macro-F1} & \fbox{\strut ROC-AUC / ECE} \\
@@ -273,7 +288,7 @@
     % Layer 1: Intent Classifier
     \node [box, fill=white, text width=4.8cm, minimum height=0.56cm] (l1) at (6.3, 2.25) {
         \textbf{Intent Classifier}\\
-        \scriptsize TF-IDF + Calibrated Head
+        \scriptsize Task Classification via TF-IDF + Calibrated Head
     };
 
     % --- JUNCTION 2: Between Intent Classifier and Model Router ---
@@ -296,7 +311,7 @@
 
     \node [box, fill=white, text width=4.8cm, minimum height=0.56cm, below=0.25cm of l3] (l4) {
         \textbf{Approval Predictor}\\
-        \scriptsize Threshold-Tuned Safety Gate
+        \scriptsize Threshold-Tuned Human-in-the-Loop Safety Gate
     };
 
     \node [box, fill=white, text width=4.8cm, minimum height=0.56cm, below=0.22cm of l4] (jk) {
@@ -309,9 +324,9 @@
         \scriptsize LoRA / PEFT Causal Language Model
     };
 
-    \node [box, fill=black!16, text width=4.8cm, minimum height=0.56cm, below=0.22cm of fc] (sig) {
-        \textbf{Orchestration Policy Output}\\
-        \scriptsize Softmax Decision \& DAG Plan Generation
+    \node [box, fill=black!22, text width=4.8cm, minimum height=0.64cm, below=0.22cm of fc] (sig) {
+        {\small\bfseries OUTPUT: Policy Decision \ding{220}}\\[0.06em]
+        \scriptsize Orchestration Policy $\;\vert\;$ Softmax Decision $\;\vert\;$ DAG Plan Generation
     };
 
     % Behind-the-stack vertical shaded backing (matching Figure 4.1 in paper)
@@ -344,7 +359,7 @@
     \draw [line width=0.45pt, black!85] (h1_3.east) -- (h1_3.east -| m_conv1);
     \draw [line width=0.45pt, black!85] (h1_4.east) -- (h1_4.east -| m_conv1);
     \draw [line width=0.6pt, black!85] ($(m_conv1)+(0, 0.28)$) -- ($(m_conv1)+(0, -0.28)$);
-    \draw [arrow] (m_conv1) |- node[pos=0.35, right, font=\fontsize{4.8}{5.8}\selectfont\bfseries, xshift=1pt]{4-Head Attn} ($(l1.north)+(1.25, 0)$);
+    \draw [arrow] (m_conv1) -| node[pos=0.65, right, font=\fontsize{4.6}{5.6}\selectfont\bfseries, xshift=1pt]{4-Head Attn} ($(l1.north)+(1.25, 0)$);
 
     % --- JUNCTION 2 DETAILS ---
     \draw [arrow] (l1.south -| circ2) -- (circ2);
@@ -369,7 +384,7 @@
     \draw [line width=0.45pt, black!85] (h2_3.east) -- (h2_3.east -| m_conv2);
     \draw [line width=0.45pt, black!85] (h2_4.east) -- (h2_4.east -| m_conv2);
     \draw [line width=0.6pt, black!85] ($(m_conv2)+(0, 0.28)$) -- ($(m_conv2)+(0, -0.28)$);
-    \draw [arrow] (m_conv2) |- node[pos=0.35, right, font=\fontsize{4.8}{5.8}\selectfont\bfseries, xshift=1pt]{4-Head Attn} ($(l2.north)+(1.25, 0)$);
+    \draw [arrow] (m_conv2) -| node[pos=0.65, right, font=\fontsize{4.6}{5.6}\selectfont\bfseries, xshift=1pt]{4-Head Attn} ($(l2.north)+(1.25, 0)$);
 
     % --- JUNCTION 3 DETAILS ---
     \draw [arrow] (l2.south -| circ3) -- (circ3);
@@ -394,7 +409,7 @@
     \draw [line width=0.45pt, black!85] (h3_3.east) -- (h3_3.east -| m_conv3);
     \draw [line width=0.45pt, black!85] (h3_4.east) -- (h3_4.east -| m_conv3);
     \draw [line width=0.6pt, black!85] ($(m_conv3)+(0, 0.28)$) -- ($(m_conv3)+(0, -0.28)$);
-    \draw [arrow] (m_conv3) |- node[pos=0.35, right, font=\fontsize{4.8}{5.8}\selectfont\bfseries, xshift=1pt]{4-Head Attn} ($(l3.north)+(1.25, 0)$);
+    \draw [arrow] (m_conv3) -| node[pos=0.65, right, font=\fontsize{4.6}{5.6}\selectfont\bfseries, xshift=1pt] (lbl_attn3) {4-Head Attn} ($(l3.north)+(1.25, 0)$);
 
     % Direct sequential flow from Agent Router through Policy Output
     \draw [arrow] (l3) -- (l4);
@@ -403,11 +418,16 @@
     \draw [arrow] (fc) -- (sig);
 
     % Right container boundary enclosing hdr_right and stack (clean, tight symmetric fit)
-    \node [dashed_container, fit=(hdr_right) (bg_stack), inner sep=0.20cm] (container_right) {};
+    \node [dashed_container, fit=(hdr_right) (bg_stack), inner xsep=0.22cm, inner ysep=0.20cm] (container_right) {};
+    \node [anchor=south west, font=\fontsize{5.2}{6.2}\selectfont\bfseries, fill=white, draw=black!75, line width=0.6pt, rounded corners=2pt, inner xsep=3.5pt, inner ysep=2pt] (badge_right) at ($(container_right.north west)+(0.20, 0)$) {
+        [ML ENGINE] Intelligence Routing, Planning \& Policy Output
+    };
 
     % Sleek horizontal connector arrow and "Model" indicator between Swarm and Intelligence Pipeline
     \node [font=\fontsize{4.8}{5.8}\selectfont\bfseries, rotate=-90, text=black!75] at (3.13, -1.45) {Model};
     \draw [-{Stealth[scale=0.65]}, line width=0.65pt, black!65] (2.90, -1.75) -- (3.36, -1.75);
+
+
 
     % =========================================================================
     % DEDICATED EXPANDED DETAIL CALLOUT PANEL: 4-HEAD ATTENTION ARCHITECTURE
@@ -493,10 +513,54 @@
         \node [draw=black!70, line width=0.65pt, fill=black!2, rounded corners=5pt, fit=(mha_hdr) (mha_in) (mha_norm) (detail_bot_pad), inner xsep=0.25cm, inner ysep=0.20cm] (detail_box) {};
     \end{scope}
 
-    % Master outer dashed boundary enclosing all components
-    \node [dashed_container, line width=0.85pt, fit=(container_topleft) (container_botleft) (container_right) (detail_box), inner sep=0.25cm] (outer_all) {};
+    % Callout connector line from 4-Head Attention to Expanded Detail Panel (zero overlapping, correct downward arrowhead)
+    \coordinate (c_callout_corner1) at (9.40, 0 |- lbl_attn3.east);
+    \coordinate (c_callout_corner2) at (9.40, -6.65);
+    \coordinate (c_callout_target) at (7.60, 0 |- detail_box.north);
+    \draw [draw=black!75, line width=0.75pt, dashed, -{Stealth[scale=0.85]}] 
+        (lbl_attn3.east) -- (c_callout_corner1) -- (c_callout_corner2) -| 
+        (c_callout_target);
+
+    % Master outer dashed boundary enclosing all components and their header badges
+    \node [dashed_container, line width=0.85pt, fit=(container_topleft) (badge_topleft) (container_botleft) (badge_botleft) (container_right) (badge_right) (detail_box) (c_callout_corner1), inner sep=0.28cm] (outer_all) {};
+
+    % =========================================================================
+    % SYSTEM INPUT (TOP) — Overall entry point, positioned above the diagram
+    % =========================================================================
+    \node [box, fill=black!22, text width=15.5cm, minimum height=0.9cm, above=0.65cm of outer_all] (sys_input) {
+        {\normalsize\bfseries \ding{220}~INPUT: User Natural Language Query, Task Objective \& Session Context}\\[0.1em]
+        \scriptsize Chat Prompt $\;\vert\;$ Multi-Turn Conversation History $\;\vert\;$ Workspace Files $\;\vert\;$ User Policy $\;\vert\;$ Agent Instructions
+    };
+    \draw [arrow, line width=1.0pt] (sys_input.south) -- (outer_all.north);
+
+    % =========================================================================
+    % SYSTEM OUTPUT (BOTTOM) — Overall exit point, positioned below the diagram
+    % =========================================================================
+    \node [box, fill=black!22, text width=15.5cm, minimum height=0.9cm, below=0.65cm of outer_all] (sys_output) {
+        {\normalsize\bfseries OUTPUT: Streamed AI Response, Verified Deliverables \& Persisted State~\ding{220}}\\[0.1em]
+        \scriptsize Real-Time SSE Token Stream $\;\vert\;$ Swarm Telemetry HUD $\;\vert\;$ Verified Artifacts $\;\vert\;$ IndexedDB (\texttt{PrismDB}) Persistence $\;\vert\;$ UI Re-render
+    };
+    \draw [arrow, line width=1.0pt] (outer_all.south) -- (sys_output.north);
 
 \end{tikzpicture}
+
+\vspace{0.6em}
+\noindent\begin{minipage}{\textwidth}
+\centering
+\fcolorbox{black!50}{black!2}{
+\parbox{\dimexpr\textwidth-2\fboxsep-2\fboxrule\relax}{
+\scriptsize
+\textbf{Glossary of Terms \& Abbreviations:}\\[0.25em]
+\begin{tabular}{@{}p{0.48\linewidth}@{\hspace{0.03\linewidth}}p{0.48\linewidth}@{}}
+$\bullet$ \textbf{LMSYS}: Large Model Systems Organization (collaborative AI benchmark arena). & $\bullet$ \textbf{ROC-AUC}: Area Under Receiver Operating Characteristic Curve.\\
+$\bullet$ \textbf{TF-IDF}: Term Frequency--Inverse Document Frequency (lexical feature extraction). & $\bullet$ \textbf{ECE}: Expected Calibration Error (gap between confidence and real accuracy).\\
+$\bullet$ \textbf{OOD}: Out-Of-Distribution (IsolationForest outlier/novelty detection). & $\bullet$ \textbf{MHA}: Multi-Head Attention (parallel attention heads for distinct task aspects).\\
+$\bullet$ \textbf{DAG}: Directed Acyclic Graph (finite graph of execution dependencies without cycles). & $\bullet$ \textbf{ORPO}: Odds Ratio Preference Optimization (reference-free preference alignment).\\
+$\bullet$ \textbf{MCP}: Model Context Protocol (open JSON-RPC standard for agent tool invocation). & $\bullet$ \textbf{PEFT / LoRA}: Parameter-Efficient Fine-Tuning via Low-Rank Adaptation.
+\end{tabular}
+}
+}
+\end{minipage}
 \end{center}
 
 \end{document}

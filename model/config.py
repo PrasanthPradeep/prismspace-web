@@ -1,3 +1,5 @@
+# Copyright 2026 Nobin Sijo (NobinSijo7T).
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -19,7 +21,7 @@ def _default_device() -> str:
 @dataclass(frozen=True)
 class Settings:
     root: Path = Path(__file__).resolve().parent
-    dataset_dir: Path = root / "datasets"
+    dataset_dir: Path = root / "datasets" / "training"
     output_dir: Path = root / "artifacts"
     seed: int = 42
     test_size: float = 0.2

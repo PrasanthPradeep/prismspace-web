@@ -1,3 +1,7 @@
+/**
+ * Copyright 2026 Nobin Sijo (NobinSijo7T).
+ * SPDX-License-Identifier: Apache-2.0
+ */
 import { useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, UserProfile } from '../db';
@@ -12,11 +16,16 @@ export function useUserProfile() {
         const defaultProfile: UserProfile = {
           key: 'current',
           username: 'User',
-          avatar: '👤',
+          avatar: 'modern:zenith',
           createdAt: now,
           updatedAt: now,
         };
         await db.user_profile.put(defaultProfile);
+      } else if (existing.avatar === '👤' || existing.avatar === 'modern:cyber') {
+        await db.user_profile.update('current', {
+          avatar: 'modern:zenith',
+          updatedAt: new Date(),
+        });
       }
     })();
   }, []);

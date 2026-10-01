@@ -1,4 +1,8 @@
 /**
+ * Copyright 2026 Nobin Sijo (NobinSijo7T).
+ * SPDX-License-Identifier: Apache-2.0
+ */
+/**
  * lib/agent-avatar.ts
  * ───────────────────
  * Maps agent identifiers (e.g. "Agent-A", "Agent-B") to sprite positions

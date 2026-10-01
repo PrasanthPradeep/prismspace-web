@@ -1,7 +1,11 @@
+/**
+ * Copyright 2026 Nobin Sijo (NobinSijo7T).
+ * SPDX-License-Identifier: Apache-2.0
+ */
 "use client";
 
 import * as React from "react";
-import { ChevronDown, Settings, User } from "lucide-react";
+import { ChevronDown, Settings } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,6 +14,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+
+import { ModernUserIcon } from "@/components/ui/ModernUserIcon";
 
 export interface ProfileDropdownData {
   name: string;
@@ -31,17 +37,31 @@ function isImageAvatar(avatar: string) {
 }
 
 function Avatar({ avatar, name }: ProfileDropdownData) {
+  const isImg = isImageAvatar(avatar);
+  const isModern =
+    !avatar ||
+    avatar === '👤' ||
+    avatar === 'default' ||
+    avatar === 'user' ||
+    avatar.startsWith('modern:');
+  const modernVariant = avatar?.startsWith('modern:')
+    ? avatar.replace('modern:', '')
+    : 'zenith';
+
   return (
     <span
-      className="flex h-9 w-9 flex-shrink-0 items-center justify-center overflow-hidden rounded-full text-lg"
+      className="relative flex h-9 w-9 flex-shrink-0 items-center justify-center overflow-hidden rounded-full text-lg"
       style={{
-        border: '1px solid rgba(0, 223, 129, 0.2)',
+        border: '1px solid rgba(0, 223, 129, 0.25)',
         background: 'rgba(0, 223, 129, 0.06)',
+        boxShadow: '0 0 10px rgba(0, 223, 129, 0.12)',
       }}
     >
-      {isImageAvatar(avatar) ? (
+      {isImg ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={avatar} alt={name} className="h-full w-full object-cover" />
+      ) : isModern ? (
+        <ModernUserIcon variant={modernVariant} className="h-full w-full" />
       ) : (
         <span aria-hidden="true">{avatar}</span>
       )}
@@ -55,9 +75,11 @@ export default function ProfileDropdown({
   className,
   ...props
 }: ProfileDropdownProps) {
+  const [isOpen, setIsOpen] = React.useState(false);
+
   return (
     <div className={cn("relative", className)} {...props}>
-      <DropdownMenu>
+      <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
         <DropdownMenuTrigger
           render={
             <button
@@ -74,7 +96,13 @@ export default function ProfileDropdown({
           >
             {data.name}
           </span>
-          <ChevronDown className="hidden h-4 w-4 sm:block" style={{ color: '#94a3b8' }} />
+          <ChevronDown
+            className={cn(
+              "hidden h-4 w-4 sm:block transition-transform duration-200 ease-out",
+              isOpen && "rotate-180"
+            )}
+            style={{ color: '#94a3b8' }}
+          />
         </DropdownMenuTrigger>
 
         <DropdownMenuContent
@@ -87,6 +115,7 @@ export default function ProfileDropdown({
             border: '1px solid rgba(255, 255, 255, 0.08)',
             boxShadow: '0 8px 40px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.04)',
             backdropFilter: 'blur(20px)',
+            transformOrigin: 'bottom right',
           }}
         >
           <div className="flex items-center gap-3 px-2 py-2.5">
@@ -127,29 +156,6 @@ export default function ProfileDropdown({
           >
             <Settings className="h-4 w-4" style={{ color: '#94a3b8' }} />
             <span>settings</span>
-          </DropdownMenuItem>
-
-          <DropdownMenuItem
-            nativeButton
-            render={
-              <button
-                type="button"
-                onClick={onSettingsClick}
-                className="flex w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] font-mono font-[500] transition-colors"
-                style={{ color: '#94a3b8' }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(0, 223, 129, 0.06)';
-                  e.currentTarget.style.color = '#00df81';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'transparent';
-                  e.currentTarget.style.color = '#94a3b8';
-                }}
-              />
-            }
-          >
-            <User className="h-4 w-4" style={{ color: '#94a3b8' }} />
-            <span>edit profile</span>
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

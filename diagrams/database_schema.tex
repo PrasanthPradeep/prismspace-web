@@ -1,5 +1,10 @@
+% Copyright 2026 Nobin Sijo (NobinSijo7T).
+% SPDX-License-Identifier: Apache-2.0
 \documentclass[10pt,a4paper,landscape]{article}
 \usepackage[margin=0.5in]{geometry}
+\usepackage{xcolor}
+\usepackage{tabularx}
+\usepackage{array}
 \usepackage{amsmath,amssymb}
 \usepackage{tikz}
 \usetikzlibrary{shapes.geometric,arrows.meta,positioning,calc,fit,backgrounds}
@@ -14,7 +19,7 @@
 \begin{document}
 
 \begin{center}
-{\Large \textbf{4.5\quad Browser IndexedDB Architecture \& Database Schema (\texttt{PrismDB})}}\\[0.8em]
+{\Large \textbf{Figure 4.4: Browser IndexedDB Architecture \& Database Schema (\texttt{PrismDB})}}\\[0.8em]
 
 \begin{tikzpicture}[
     auto,
@@ -60,6 +65,14 @@
 ]
 
     % =========================================================================
+    % INPUT: USER DATA ACTIONS
+    % =========================================================================
+    \node [system_box, text width=21.0cm, fill=black!8] (input_node) at (-0.5, 7.35) {
+        \textbf{[INPUT: User-Initiated Data Actions]} $\;\longrightarrow\;$
+        Add / Edit / Delete Records $\;\vert\;$ Agent Chat Messages $\;\vert\;$ Task Completions $\;\vert\;$ Bookmark \& Habit Updates
+    };
+
+    % =========================================================================
     % TOP: REACTIVE ARCHITECTURE FLOW
     % =========================================================================
     
@@ -94,6 +107,9 @@
     % Boundary box for IndexedDB Engine
     \node [draw=black!45, dashed, rounded corners=6pt, line width=0.7pt, fit=(react_ui) (hooks_layer) (dexie_engine), inner sep=0.22cm] (top_boundary) {};
     \node [anchor=west, font=\tiny\bfseries, fill=white] at ($(top_boundary.north west)+(0.3,0)$) {Client-Side Reactive Bridge};
+
+    % Arrow from INPUT node down into React UI components
+    \draw [rel_arrow, line width=0.85pt] (input_node.south -| react_ui.north) -- (react_ui.north);
 
     % =========================================================================
     % BOTTOM: RELATIONAL INDEXEDDB TABLES (PRISMDB)
@@ -242,10 +258,39 @@
     \draw [rel_arrow, line width=1.1pt] (persist_start) -- 
         node[right, font=\scriptsize\bfseries, align=left, xshift=4pt]{Persists to IndexedDB\\\tiny(Native IDB Transactions)} (persist_end);
 
+    % =========================================================================
+    % OUTPUT: REACTIVE DATA RETURNED TO UI
+    % =========================================================================
+    \node [system_box, text width=14.0cm, fill=black!8, below=0.7cm of schema_boundary] (output_node) {
+        \textbf{[OUTPUT: Reactive Data Stream]} $\;\longrightarrow\;$
+        Live Query Results via \texttt{useLiveQuery()} $\;\vert\;$ Auto-Rendered UI Updates $\;\vert\;$ Verified Persistent State
+    };
+    \draw [rel_arrow] (schema_boundary.south) -- (output_node.north);
+
 \end{tikzpicture}
 
 \vspace{0.8em}
 {\normalsize \textbf{Figure 4.4: Browser IndexedDB Database Schema and Reactive Data Architecture (\texttt{PrismDB})}}
 \end{center}
+
+\vspace{0.4em}
+\noindent\fcolorbox{black!50}{black!2}{%
+\parbox{\dimexpr\textwidth-2\fboxsep-2\fboxrule\relax}{%
+\scriptsize
+\textbf{\small Database Schema \& Reactive Engine Glossary}\\[0.3em]
+\begin{tabular}{@{}p{0.31\linewidth}@{\hspace{0.035\linewidth}}p{0.31\linewidth}@{\hspace{0.035\linewidth}}p{0.31\linewidth}@{}}
+\textbf{PrismDB}: Local client-side database built on IndexedDB storing sessions, habits, tasks, and settings securely in-browser. &
+\textbf{PK (\texttt{++id} / \texttt{\&id})}: Primary Key; \texttt{++id} auto-increments integers; \texttt{\&id} designates unique string/UUID keys. &
+\textbf{\texttt{useLiveQuery()}}: Reactive hook subscribing React components to live query results, auto-rerendering on data change.\\
+
+\textbf{IndexedDB (IDB)}: W3C standard browser NoSQL object store providing high-capacity transactional persistence. &
+\textbf{Idx / Compound Index}: Secondary B-tree index; \texttt{[a+b]} enables high-speed compound filtering without full scans. &
+\textbf{FK (Foreign Key)}: Logical relational link associating child entity records with parent table primary keys ($1:N$).\\
+
+\textbf{Dexie.js v3}: Minimalist TypeScript wrapper over IndexedDB handling migrations, indices, and transactions. &
+\textbf{Multi-Entry (\texttt{*tags})}: Array index where each element is indexed individually for rapid membership search. &
+\textbf{CRUD Transactions}: Atomic Create, Read, Update, and Delete operations executed with ACID guarantees in browser.
+\end{tabular}
+}}
 
 \end{document}

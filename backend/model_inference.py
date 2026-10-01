@@ -1,3 +1,5 @@
+# Copyright 2026 Nobin Sijo (NobinSijo7T).
+# SPDX-License-Identifier: Apache-2.0
 """
 Model Inference Service for Hive Backend
 ==========================================
@@ -256,6 +258,8 @@ PROVIDER_MAP = {
     "openai": "openai",
     "anthropic": "anthropic",
     "google": "google",
+    "openrouter": "openrouter",
+    "deepseek": "deepseek",
     "meta": "nvidia",       # Meta models typically served via NVIDIA NIM
     "mistral": "nvidia",    # Mistral models served via NVIDIA NIM
     "huggingface": "nvidia",
@@ -388,6 +392,7 @@ class IntelligenceResult:
     provider_confidence: float = 0.0
     recommended_agent: Optional[str] = None
     agent_confidence: float = 0.0
+    recommended_workers: int = 1
     estimated_latency_seconds: Optional[float] = None
     estimated_cost: Optional[float] = None
     approval_required: bool = False
@@ -424,6 +429,12 @@ def analyze_request(text: str) -> IntelligenceResult:
 
     # 2. Agent Routing
     result.recommended_agent, result.agent_confidence = _predict_class("agent", features)
+
+    # Use the trained intent/agent routing signals to size the worker mesh.
+    intent = (result.intent or "").lower()
+    agent = (result.recommended_agent or "").lower()
+    complex_intents = {"research", "tool_use", "coding", "planning", "validation"}
+    result.recommended_workers = 3 if intent in complex_intents or agent in {"planning", "research", "coding", "github", "filesystem"} else 1
 
     # 3. Provider/Model Routing
     raw_provider, result.provider_confidence = _predict_class("provider", features)

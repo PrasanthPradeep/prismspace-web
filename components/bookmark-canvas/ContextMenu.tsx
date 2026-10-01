@@ -1,3 +1,7 @@
+/**
+ * Copyright 2026 Nobin Sijo (NobinSijo7T).
+ * SPDX-License-Identifier: Apache-2.0
+ */
 'use client';
 
 import { useEffect, useRef } from 'react';
@@ -106,26 +110,33 @@ export function ContextMenu({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.92, y: -4 }}
           transition={{ duration: 0.12 }}
-          className="fixed z-[200] min-w-[200px] overflow-hidden rounded-xl border border-white/10"
+          className="fixed z-[200] min-w-[200px] overflow-hidden rounded-xl border"
           style={{
             left: state.x,
             top: state.y,
-            background: 'oklch(0.14 0.015 270 / 95%)',
-            backdropFilter: 'blur(20px)',
-            boxShadow: '0 8px 40px oklch(0 0 0 / 60%), 0 2px 8px oklch(0 0 0 / 40%)',
+            background: 'rgba(9, 12, 18, 0.95)',
+            backdropFilter: 'blur(20px) saturate(1.8)',
+            borderColor: 'rgba(255, 255, 255, 0.08)',
+            boxShadow: '0 8px 40px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.4)',
           }}
           onContextMenu={(e) => e.preventDefault()}
         >
           {/* Color palette row */}
-          <div className="flex items-center gap-1.5 px-3 py-2.5 border-b border-white/8">
-            <Palette size={12} className="text-white/40 shrink-0" />
+          <div 
+            className="flex items-center gap-1.5 px-3 py-2.5 border-b"
+            style={{ borderColor: 'rgba(255, 255, 255, 0.08)' }}
+          >
+            <Palette size={12} style={{ color: '#94a3b8' }} className="shrink-0" />
             <div className="flex gap-1">
               {STICKY_COLORS.map((c) => (
                 <button
                   key={c.value}
                   title={c.label}
-                  className="w-4 h-4 rounded-full transition-transform hover:scale-125 focus:outline-none ring-1 ring-white/20"
-                  style={{ background: c.value }}
+                  className="w-4 h-4 rounded-full transition-transform hover:scale-125 focus:outline-none"
+                  style={{ 
+                    background: c.value,
+                    boxShadow: '0 0 0 1px rgba(255, 255, 255, 0.2)',
+                  }}
                   onClick={() => {
                     onColorChange(id, c.value);
                     onClose();
@@ -138,13 +149,31 @@ export function ContextMenu({
           <div className="py-1">
             {menuItems.map((item, i) => {
               if (item === null) {
-                return <div key={i} className="my-1 mx-3 h-px bg-white/8" />;
+                return <div key={i} className="my-1 mx-3 h-px" style={{ background: 'rgba(255, 255, 255, 0.08)' }} />;
               }
               const Icon = item.icon;
+              const getColor = () => {
+                if (item.className.includes('blue')) return '#60a5fa';
+                if (item.className.includes('amber')) return '#fbbf24';
+                if (item.className.includes('violet')) return '#00df81';
+                if (item.className.includes('red')) return '#f87171';
+                return '#cbd5e1';
+              };
               return (
                 <button
                   key={i}
-                  className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left transition-colors hover:bg-white/8 focus:bg-white/8 focus:outline-none ${item.className || 'text-white/80'}`}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left transition-colors focus:outline-none"
+                  style={{
+                    color: getColor(),
+                    fontFamily: 'Space Grotesk, sans-serif',
+                    fontWeight: 600,
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'transparent';
+                  }}
                   onClick={() => {
                     item.action();
                     onClose();

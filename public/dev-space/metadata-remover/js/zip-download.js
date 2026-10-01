@@ -1,3 +1,7 @@
+/**
+ * Copyright 2026 Nobin Sijo (NobinSijo7T).
+ * SPDX-License-Identifier: Apache-2.0
+ */
 const ZIP32_MAX = 0xffffffff;
 const ZIP16_MAX = 0xffff;
 const CRC_CHUNK_BYTES = 4 * 1024 * 1024;

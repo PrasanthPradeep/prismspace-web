@@ -1,3 +1,5 @@
+# Copyright 2026 Nobin Sijo (NobinSijo7T).
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 from pathlib import Path
 from .trainer import TabularTrainer, TrainResult

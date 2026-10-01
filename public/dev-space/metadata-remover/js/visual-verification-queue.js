@@ -1,3 +1,7 @@
+/**
+ * Copyright 2026 Nobin Sijo (NobinSijo7T).
+ * SPDX-License-Identifier: Apache-2.0
+ */
 const BUDGET_SKIP_RETRY_REASON = 'budget';
 const UNAVAILABLE_RETRY_REASON = 'unavailable';
 

@@ -1,3 +1,7 @@
+/**
+ * Copyright 2026 Nobin Sijo (NobinSijo7T).
+ * SPDX-License-Identifier: Apache-2.0
+ */
 export const VISUAL_THUMBNAIL_MAX_WIDTH = 360;
 export const VISUAL_THUMBNAIL_MAX_HEIGHT = 260;
 export const VISUAL_PIXEL_COMPARE_MAX = 4_000_000;

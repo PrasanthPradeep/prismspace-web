@@ -1,3 +1,7 @@
+/**
+ * Copyright 2026 Nobin Sijo (NobinSijo7T).
+ * SPDX-License-Identifier: Apache-2.0
+ */
 "use client"
 
 import { FC, useEffect, useRef, useState } from "react"
@@ -268,6 +272,7 @@ export function SmoothCursor({
   if (!isEnabled || !userEnabled) {
     return null
   }
+
 
   return (
     <motion.div

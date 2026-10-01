@@ -1,3 +1,7 @@
+/**
+ * Copyright 2026 Nobin Sijo (NobinSijo7T).
+ * SPDX-License-Identifier: Apache-2.0
+ */
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -26,7 +30,10 @@ function saveCamera(camera: CanvasCamera): void {
   }
 }
 
-export function useCanvas(canvasRef: React.RefObject<HTMLDivElement | null>) {
+export function useCanvas(
+  canvasRef: React.RefObject<HTMLDivElement | null>,
+  isPanToolActive: boolean = false
+) {
   // Always start with default camera so SSR and initial client render match.
   // localStorage value is applied after hydration in useEffect below.
   const [camera, setCamera] = useState<CanvasCamera>(DEFAULT_CAMERA);
@@ -77,17 +84,17 @@ export function useCanvas(canvasRef: React.RefObject<HTMLDivElement | null>) {
     [canvasRef, updateCamera]
   );
 
-  // Pan with middle mouse or space+drag
+  // Pan with middle mouse, space+drag, or when pan tool is active
   const handleMouseDown = useCallback(
     (e: MouseEvent) => {
       const isMiddle = e.button === 1;
-      const isSpaceDrag = spaceHeld.current && e.button === 0;
+      const isSpaceDrag = (spaceHeld.current || isPanToolActive) && e.button === 0;
       if (!isMiddle && !isSpaceDrag) return;
       e.preventDefault();
       isPanning.current = true;
       panStart.current = { x: e.clientX, y: e.clientY, cx: camera.x, cy: camera.y };
     },
-    [camera.x, camera.y]
+    [camera.x, camera.y, isPanToolActive]
   );
 
   const handleMouseMove = useCallback(

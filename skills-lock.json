@@ -43,6 +43,12 @@
       "skillPath": "skills/brag/SKILL.md",
       "computedHash": "aee9951572e78aec28d2268ba8f6fc181a80dad6ff7c7505104ba587f0a3d179"
     },
+    "checking-license-compliance": {
+      "source": "jeremylongshore/tons-of-skills-marketplace",
+      "sourceType": "github",
+      "skillPath": "skills/.curated/checking-license-compliance/SKILL.md",
+      "computedHash": "6acc8838111e5fe852ad8b118b87454b249991baa3ce77ef5bedd5663f863579"
+    },
     "commit-context": {
       "source": "rohitg00/agentmemory",
       "sourceType": "github",
@@ -73,6 +79,12 @@
       "skillPath": "plugin/skills/lesson/SKILL.md",
       "computedHash": "dbe659a0060362ee2e132c8a6d2eb8f90b84aaf9761e28060fc8da6cb359a446"
     },
+    "license-compliance-auditor": {
+      "source": "jorgealves/agent_skills",
+      "sourceType": "github",
+      "skillPath": "license-compliance-auditor/SKILL.md",
+      "computedHash": "33ff7b9d25372b069ca2df59814fa435d86cb3b34e23ff4cc19ff902651196a3"
+    },
     "memory-discipline": {
       "source": "rohitg00/agentmemory",
       "sourceType": "github",
@@ -97,11 +109,29 @@
       "skillPath": "plugin/skills/remember/SKILL.md",
       "computedHash": "367f8b564b58b93a02c7c4d99cfce917182b2fe44f6e8096928de25200aa745d"
     },
+    "seo-audit": {
+      "source": "every-app/open-seo",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/seo-audit/SKILL.md",
+      "computedHash": "7a38fb55220890d7b776cfb2f6689814710c9da9cca6c44c84179142ed7e7ece"
+    },
     "session-history": {
       "source": "rohitg00/agentmemory",
       "sourceType": "github",
       "skillPath": "plugin/skills/session-history/SKILL.md",
       "computedHash": "791295c3d83f1e765ba380c74e9e231b767337eda3768d9346e399c1e776f5f3"
+    },
+    "technical-seo-triage": {
+      "source": "marketingskills/seo",
+      "sourceType": "github",
+      "skillPath": "skills/technical-seo-triage/SKILL.md",
+      "computedHash": "1a585c49678bf9b87d5ea9d991d2fadfcf4f97749291af4b0464dde4077ef45e"
+    },
+    "vercel-react-best-practices": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/react-best-practices/SKILL.md",
+      "computedHash": "6b526d013e28073246a36f99b529bc43745d30832ecfa8217b359c34f260ca6b"
     },
     "write-agentmemory-skill": {
       "source": "rohitg00/agentmemory",

@@ -1,3 +1,7 @@
+/**
+ * Copyright 2026 Nobin Sijo (NobinSijo7T).
+ * SPDX-License-Identifier: Apache-2.0
+ */
 export const MODAL_LOADING_MESSAGE = 'Reading metadata. Results will appear when analysis completes.';
 export const MODAL_PROCESSING_MESSAGE = 'Cleaning and re-scanning this file. Verification will appear when processing completes.';
 export const MODAL_ERROR_MESSAGE = 'Unable to process this file.';

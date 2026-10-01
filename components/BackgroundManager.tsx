@@ -1,6 +1,11 @@
+/**
+ * Copyright 2026 Nobin Sijo (NobinSijo7T).
+ * SPDX-License-Identifier: Apache-2.0
+ */
 'use client';
 
 import { useEffect, useState } from 'react';
+import Image from 'next/image';
 import { db } from '@/lib/db';
 
 type BackgroundMediaType = 'image' | 'video';
@@ -19,7 +24,7 @@ const CUSTOM_WALLPAPER_KEY = 'custom-wallpaper';
 const DEFAULT_BACKGROUND: StoredBackgroundSetting = {
   source: 'static',
   mediaType: 'image',
-  path: '/images/BG.png',
+  path: '/bg.png',
   name: 'Default',
 };
 
@@ -28,7 +33,7 @@ function getMediaTypeFromPath(path: string): BackgroundMediaType {
 }
 
 function getLegacyBackgroundSetting(value: string | null): StoredBackgroundSetting {
-  if (!value || value === 'default') return DEFAULT_BACKGROUND;
+  if (!value || value === 'default' || value === '/images/BG.png') return DEFAULT_BACKGROUND;
 
   if (value === 'custom') {
     return {
@@ -47,7 +52,7 @@ function getLegacyBackgroundSetting(value: string | null): StoredBackgroundSetti
 
 export function BackgroundManager() {
   const [bgType, setBgType] = useState<BackgroundMediaType>('image');
-  const [bgUrl, setBgUrl] = useState<string>('/images/BG.png');
+  const [bgUrl, setBgUrl] = useState<string>(DEFAULT_BACKGROUND.path!);
   const [opacity, setOpacity] = useState<number>(100);
 
   useEffect(() => {
@@ -127,9 +132,13 @@ export function BackgroundManager() {
   return (
     <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none bg-[#090c12]">
       {bgType === 'image' && bgUrl && (
-        <img
+        <Image
           src={bgUrl}
           alt="Background"
+          fill
+          sizes="100vw"
+          quality={70}
+          unoptimized={bgUrl.startsWith('blob:') || bgUrl.startsWith('data:')}
           className="w-full h-full object-cover transition-opacity duration-300"
           style={{ opacity: opacity / 100 }}
         />

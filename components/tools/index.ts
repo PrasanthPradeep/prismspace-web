@@ -1,12 +1,13 @@
+/**
+ * Copyright 2026 Nobin Sijo (NobinSijo7T).
+ * SPDX-License-Identifier: Apache-2.0
+ */
 // Export all dev-space tools
 export { BookmarkManager } from './BookmarkManager';
 export { ChecklistManager } from './ChecklistManager';
 export { ColorGenerator } from './ColorGenerator';
-export { GitReference } from './GitReference';
-export { MatrixDisplay } from './MatrixDisplay';
 export { NotepadPanel } from './NotepadPanel';
 export { PomodoroTimer } from './PomodoroTimer';
-export { QRCodeGenerator } from './QRCodeGenerator';
 export { WebScraperTool } from './WebScraperTool';
 
 // To be implemented:

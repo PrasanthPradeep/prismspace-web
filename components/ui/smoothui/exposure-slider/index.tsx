@@ -1,3 +1,7 @@
+/**
+ * Copyright 2026 Nobin Sijo (NobinSijo7T).
+ * SPDX-License-Identifier: Apache-2.0
+ */
 "use client";
 
 import { cn } from "@/lib/utils";
@@ -33,7 +37,9 @@ export interface ExposureSliderProps {
 }
 
 const NOTCH_WIDTH = 14; // px per notch (3px notch + 11px gap)
-const SPRING_CONFIG = { stiffness: 300, damping: 30, mass: 0.5 };
+// Critically-damped spring (ratio ≈ 1.0): settles smoothly, no overshoot, no dead snap.
+// Previous: stiffness:300, damping:30, mass:0.5 → ratio ≈ 8.2 (snapped dead).
+const SPRING_CONFIG = { stiffness: 260, damping: 32, mass: 1 };
 
 const DEFAULT_ACCENT = "oklch(0.65 0.25 12)";
 
@@ -59,7 +65,8 @@ const ExposureSlider = ({
 
   // Raw drag offset and spring-smoothed version
   const rawX = useMotionValue(0);
-  const x = shouldReduceMotion ? rawX : useSpring(rawX, SPRING_CONFIG);
+  const springX = useSpring(rawX, SPRING_CONFIG);
+  const x = shouldReduceMotion ? rawX : springX;
 
   // Sync rawX when targetValue changes externally
   useEffect(() => {

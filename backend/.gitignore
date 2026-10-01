@@ -11,7 +11,10 @@ build/
 
 # Cloned Hive repo — tracked as a submodule (or ignored here)
 # To use as submodule: git submodule add https://github.com/aden-hive/hive.git backend/hive
-hive/
+hive/*
+!hive/tools/
+hive/tools/*
+!hive/tools/mcp_servers.json
 
 # Env / secrets
 .env

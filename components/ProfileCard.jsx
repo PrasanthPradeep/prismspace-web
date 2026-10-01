@@ -1,12 +1,31 @@
+/**
+ * Copyright 2026 Nobin Sijo (NobinSijo7T).
+ * SPDX-License-Identifier: Apache-2.0
+ */
 import React, { useEffect, useRef, useCallback, useMemo } from 'react';
+import Image from 'next/image';
 import './ProfileCard.css';
 
-const DEFAULT_INNER_GRADIENT = 'linear-gradient(145deg,#60496e8c 0%,#71C4FF44 100%)';
+const DEFAULT_INNER_GRADIENT = 'radial-gradient(circle at 50% 8%, rgba(0, 223, 129, 0.12) 0%, rgba(11, 16, 24, 0.94) 65%)';
+
+const DEFAULT_STATS = [
+  { label: 'Projects', value: 12 },
+  { label: 'Commits', value: 480 },
+  { label: 'Streak', value: 21 }
+];
+
+const DEFAULT_SKILLS = ['AI/ML', 'Cybersecurity', 'Full-stack'];
+
+const DEFAULT_LINKS = [
+  { label: 'GitHub', href: '#' },
+  { label: 'Portfolio', href: '#' },
+  { label: 'Email', href: '#' }
+];
 
 const ANIMATION_CONFIG = {
   INITIAL_DURATION: 1200,
-  INITIAL_X_OFFSET: 70,
-  INITIAL_Y_OFFSET: 60,
+  INITIAL_X_OFFSET: 60,
+  INITIAL_Y_OFFSET: 50,
   DEVICE_BETA_OFFSET: 20,
   ENTER_TRANSITION_MS: 180
 };
@@ -16,9 +35,9 @@ const round = (v, precision = 3) => parseFloat(v.toFixed(precision));
 const adjust = (v, fMin, fMax, tMin, tMax) => round(tMin + ((tMax - tMin) * (v - fMin)) / (fMax - fMin));
 
 const ProfileCardComponent = ({
-  avatarUrl = '<Placeholder for avatar URL>',
-  iconUrl = '<Placeholder for icon URL>',
-  grainUrl = '<Placeholder for grain URL>',
+  avatarUrl = '',
+  iconUrl = '',
+  grainUrl = '',
   innerGradient,
   behindGlowEnabled = true,
   behindGlowColor,
@@ -28,20 +47,27 @@ const ProfileCardComponent = ({
   enableMobileTilt = false,
   mobileTiltSensitivity = 5,
   miniAvatarUrl,
-  name = 'Javi A. Torres',
-  title = 'Software Engineer',
-  handle = 'javicodes',
+  name = 'Nobin',
+  title = 'PrismSpace User',
+  tagline = 'You code it. Now orchestrate.',
+  stats = DEFAULT_STATS,
+  skills = DEFAULT_SKILLS,
+  links = DEFAULT_LINKS,
+  handle = 'nobin',
   status = 'Online',
-  contactText = 'Contact',
   showUserInfo = true,
-  onContactClick
+  showContactButton = false,
+  contactText = 'Contact',
+  onContactClick = undefined
 }) => {
   const wrapRef = useRef(null);
   const shellRef = useRef(null);
+  const avatarRingRef = useRef(null);
 
   const enterTimerRef = useRef(null);
   const leaveRafRef = useRef(null);
 
+  // ─── 3D Tilt Engine ───
   const tiltEngine = useMemo(() => {
     if (!enableTilt) return null;
 
@@ -55,7 +81,7 @@ const ProfileCardComponent = ({
     let targetY = 0;
 
     const DEFAULT_TAU = 0.14;
-    const INITIAL_TAU = 0.6;
+    const INITIAL_TAU = 0.55;
     let initialUntil = 0;
 
     const setVarsFromXY = (x, y) => {
@@ -80,8 +106,8 @@ const ProfileCardComponent = ({
         '--pointer-from-center': `${clamp(Math.hypot(percentY - 50, percentX - 50) / 50, 0, 1)}`,
         '--pointer-from-top': `${percentY / 100}`,
         '--pointer-from-left': `${percentX / 100}`,
-        '--rotate-x': `${round(-(centerX / 5))}deg`,
-        '--rotate-y': `${round(centerY / 4)}deg`
+        '--rotate-x': `${round(-(centerX / 6))}deg`,
+        '--rotate-y': `${round(centerY / 5)}deg`
       };
 
       for (const [k, v] of Object.entries(properties)) wrap.style.setProperty(k, v);
@@ -289,20 +315,52 @@ const ProfileCardComponent = ({
     handleDeviceOrientation
   ]);
 
+  // ─── Avatar Particle Burst ───
+  const triggerParticleBurst = useCallback((e) => {
+    const ring = avatarRingRef.current;
+    if (!ring) return;
+
+    const rect = ring.getBoundingClientRect();
+    const originX = rect.left + rect.width / 2;
+    const originY = rect.top + rect.height / 2;
+
+    for (let i = 0; i < 12; i++) {
+      const p = document.createElement('div');
+      p.className = 'pc-particle';
+      document.body.appendChild(p);
+
+      const angle = (i / 12) * Math.PI * 2 + (Math.random() * 0.3 - 0.15);
+      const dist = 38 + Math.random() * 32;
+      const tx = Math.cos(angle) * dist;
+      const ty = Math.sin(angle) * dist;
+
+      p.style.left = `${originX}px`;
+      p.style.top = `${originY}px`;
+      p.style.transform = `translate(-50%, -50%) scale(${1 + Math.random() * 0.5})`;
+      p.style.opacity = '1';
+      p.style.transition = 'all 0.6s cubic-bezier(0.16, 1, 0.3, 1)';
+
+      requestAnimationFrame(() => {
+        p.style.transform = `translate(calc(-50% + ${tx}px), calc(-50% + ${ty}px)) scale(0.2)`;
+        p.style.opacity = '0';
+      });
+
+      setTimeout(() => {
+        p.remove();
+      }, 650);
+    }
+  }, []);
+
   const cardStyle = useMemo(
     () => ({
       '--icon': iconUrl ? `url(${iconUrl})` : 'none',
       '--grain': grainUrl ? `url(${grainUrl})` : 'none',
       '--inner-gradient': innerGradient ?? DEFAULT_INNER_GRADIENT,
-      '--behind-glow-color': behindGlowColor ?? 'rgba(125, 190, 255, 0.67)',
-      '--behind-glow-size': behindGlowSize ?? '50%'
+      '--behind-glow-color': behindGlowColor ?? 'rgba(0, 223, 129, 0.22)',
+      '--behind-glow-size': behindGlowSize ?? '55%'
     }),
     [iconUrl, grainUrl, innerGradient, behindGlowColor, behindGlowSize]
   );
-
-  const handleContactClick = useCallback(() => {
-    onContactClick?.();
-  }, [onContactClick]);
 
   return (
     <div ref={wrapRef} className={`pc-card-wrapper ${className}`.trim()} style={cardStyle}>
@@ -310,57 +368,122 @@ const ProfileCardComponent = ({
       <div ref={shellRef} className="pc-card-shell">
         <section className="pc-card">
           <div className="pc-inside">
-            <div className="pc-shine" />
-            <div className="pc-glare" />
-            <div className="pc-content pc-avatar-content">
-              <img
-                className="avatar"
-                src={avatarUrl}
-                alt={`${name || 'User'} avatar`}
-                loading="lazy"
-                onError={e => {
-                  const t = e.target;
-                  t.style.display = 'none';
-                }}
-              />
-              {showUserInfo && (
-                <div className="pc-user-info">
-                  <div className="pc-user-details">
-                    <div className="pc-mini-avatar">
-                      <img
-                        src={miniAvatarUrl || avatarUrl}
-                        alt={`${name || 'User'} mini avatar`}
-                        loading="lazy"
-                        onError={e => {
-                          const t = e.target;
-                          t.style.opacity = '0.5';
-                          t.src = avatarUrl;
-                        }}
-                      />
-                    </div>
-                    <div className="pc-user-text">
-                      <div className="pc-handle">@{handle}</div>
-                      <div className="pc-status">{status}</div>
-                    </div>
-                  </div>
-                  <button
-                    className="pc-contact-btn"
-                    onClick={handleContactClick}
-                    style={{ pointerEvents: 'auto' }}
-                    type="button"
-                    aria-label={`Contact ${name || 'user'}`}
-                  >
-                    {contactText}
-                  </button>
+            {/* Specular sheen & edge highlights */}
+            <div className="pc-sheen" />
+            <div className="pc-specular-edge" />
+
+            {/* 1. Header: Badge & Role */}
+            <div className="pc-header-row">
+              <div className="pc-badge">
+                <span className="pc-badge-dot" />
+                <span className="pc-badge-text">PRISMSPACE</span>
+              </div>
+              {title && (
+                <div className="pc-role-chip">
+                  <span>{title}</span>
                 </div>
               )}
             </div>
-            <div className="pc-content">
-              <div className="pc-details">
-                <h3>{name}</h3>
-                <p>{title}</p>
+
+            {/* 2. Identity: Name & Tagline */}
+            <div className="pc-identity">
+              <h2 className="pc-name">{name || 'Nobin'}</h2>
+              {tagline && <p className="pc-tagline">{tagline}</p>}
+            </div>
+
+            {/* 3. Centerpiece: Avatar Ring with Conic Gradient & Glow */}
+            <div className="pc-avatar-stage">
+              <div
+                ref={avatarRingRef}
+                className="pc-avatar-ring"
+                onClick={triggerParticleBurst}
+                role="button"
+                tabIndex={0}
+                title="Click for particle effect"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    triggerParticleBurst(e);
+                  }
+                }}
+              >
+                <div className="pc-avatar-inner">
+                  {avatarUrl && avatarUrl !== '🔥' ? (
+                    <Image
+                      className="pc-avatar-img"
+                      src={avatarUrl}
+                      alt={`${name || 'User'} avatar`}
+                      width={96}
+                      height={96}
+                      unoptimized
+                      loading="lazy"
+                      onError={e => {
+                        const t = e.target;
+                        t.style.display = 'none';
+                      }}
+                    />
+                  ) : (
+                    <span className="pc-avatar-emoji">🔥</span>
+                  )}
+                </div>
               </div>
             </div>
+
+            {/* 4. Stats Row */}
+            {stats && stats.length > 0 && (
+              <div className="pc-stats-row" aria-label="Developer Statistics">
+                {stats.map((stat, i) => (
+                  <div key={i} className="pc-stat-item">
+                    <span className="pc-stat-value">{stat.value}</span>
+                    <span className="pc-stat-label">{stat.label}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* 5. Skill Chips */}
+            {skills && skills.length > 0 && (
+              <div className="pc-skills-row" aria-label="Skills">
+                {skills.map((skill, i) => (
+                  <span key={i} className="pc-skill-chip">{skill}</span>
+                ))}
+              </div>
+            )}
+
+            {/* 6. Links Row */}
+            {links && links.length > 0 && (
+              <div className="pc-links-row" aria-label="Social Links">
+                {links.map((link, i) => {
+                  const label = typeof link === 'string' ? link : link.label;
+                  const href = typeof link === 'string' ? '#' : (link.href || '#');
+                  return (
+                    <a
+                      key={i}
+                      href={href}
+                      className="pc-link-btn"
+                      onClick={(e) => {
+                        if (href === '#') e.preventDefault();
+                        onContactClick?.(label);
+                      }}
+                    >
+                      <span>{label}</span>
+                      <span className="pc-underline-sweep" />
+                    </a>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* 7. Footer: Handle & Status Bar */}
+            {showUserInfo && (
+              <div className="pc-footer-bar">
+                <span className="pc-handle">@{handle || 'nobin'}</span>
+                <div className="pc-status">
+                  <span className="pc-status-dot" />
+                  <span>{status}</span>
+                </div>
+              </div>
+            )}
           </div>
         </section>
       </div>

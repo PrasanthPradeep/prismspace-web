@@ -1,3 +1,5 @@
+# Copyright 2026 Nobin Sijo (NobinSijo7T).
+# SPDX-License-Identifier: Apache-2.0
 """Generate a seed provider-routing dataset for the PrismSpace provider router.
 
 Maps realistic prompts to the Hive provider best suited for each task type,
@@ -6,7 +8,7 @@ code, safety, privacy).  This is a bootstrap dataset — replace it with
 measured production telemetry as soon as practical.
 
 Usage:
-    python -m model.generate_provider_seed --output-dir model/datasets/curated/provider
+    python -m model.generate_provider_seed --output-dir model/datasets/training/curated/provider
     python -m model.generate_provider_seed --samples-per-provider 200
     python -m model.generate_provider_seed --dry-run
 """
@@ -368,7 +370,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Generate seed provider-routing data for the PrismSpace provider router.",
     )
-    parser.add_argument("--output-dir", default="model/datasets/curated/provider",
+    parser.add_argument("--output-dir", default="model/datasets/training/curated/provider",
                         help="Output directory for train.jsonl and test.jsonl")
     parser.add_argument("--samples-per-provider", type=int, default=200,
                         help="Number of samples to generate per provider (default: 200)")
