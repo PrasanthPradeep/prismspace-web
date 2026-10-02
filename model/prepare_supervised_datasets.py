@@ -110,6 +110,89 @@ def _prepare_success(root: Path, output: Path) -> dict[str, Any]:
     return {split: _write_jsonl(output / "success" / f"{split}.jsonl", rows) for split, rows in rows_by_split.items()}
 
 
+def _prepare_reward_oasst1(root: Path, output: Path) -> dict[str, Any]:
+    """Append OASST1 ranked-sibling pairs to curated reward files.
+
+    Siblings sharing (tree, parent) with distinct ranks form
+    chosen (lowest rank) / rejected (highest rank) pairs; the prompt is the
+    conversation path from the tree root to the parent message.
+    """
+    source = root / "oasst1"
+    files = sorted(source.glob("**/train-*.parquet")) + sorted(source.glob("**/validation-*.parquet"))
+    if not files:
+        return {"train": 0, "test": 0, "reason": "oasst1 parquet not found"}
+    frame = pd.concat((pd.read_parquet(path) for path in files), ignore_index=True)
+
+    by_id: dict[str, dict[str, Any]] = {}
+    for record in frame.to_dict("records"):
+        mid = record.get("message_id")
+        if isinstance(mid, str):
+            by_id[mid] = record
+
+    def _path_text(parent_id: Any, depth: int = 6) -> str:
+        chain: list[str] = []
+        seen: set[str] = set()
+        current = parent_id
+        while isinstance(current, str) and current not in seen and len(chain) < depth:
+            seen.add(current)
+            node = by_id.get(current)
+            if not node:
+                break
+            text = str(node.get("text", "") or "").strip()
+            if text:
+                chain.append(f"{node.get('role', 'prompter')}: {text}")
+            current = node.get("parent_id")
+        return "\n".join(reversed(chain))
+
+    groups: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for record in frame.to_dict("records"):
+        if record.get("role") != "assistant" or record.get("deleted"):
+            continue
+        rank = record.get("rank")
+        try:
+            rank = float(rank)
+        except (TypeError, ValueError):
+            continue
+        text = str(record.get("text", "") or "").strip()
+        if not text:
+            continue
+        key = (str(record.get("message_tree_id")), str(record.get("parent_id")))
+        groups.setdefault(key, []).append({"rank": rank, "text": text, "parent": record.get("parent_id")})
+
+    rows_by_split: dict[str, list[dict[str, Any]]] = {"train": [], "test": []}
+    for (tree_id, parent_id), candidates in groups.items():
+        ranks = {c["rank"] for c in candidates}
+        if len(ranks) < 2:
+            continue
+        ordered = sorted(candidates, key=lambda c: c["rank"])
+        prompt = _path_text(parent_id)
+        if not prompt.strip():
+            continue
+        rows_by_split[_split_group(f"{tree_id}:{parent_id}")].append({
+            "prompt": prompt,
+            "chosen": ordered[0]["text"],
+            "rejected": ordered[-1]["text"],
+        })
+
+    counts: dict[str, Any] = {}
+    for split, rows in rows_by_split.items():
+        path = output / "reward" / f"{split}.jsonl"
+        # NOTE: iterate raw lines — splitlines() would break on U+2028 etc.
+        # embedded in ultrafeedback texts.
+        existing: list[dict[str, Any]] = []
+        if path.exists():
+            with path.open(encoding="utf-8") as handle:
+                for line in handle:
+                    if line.strip():
+                        existing.append(json.loads(line))
+        # Idempotent reruns: skip oasst1 rows already merged in a prior run.
+        seen = {(r.get("prompt"), r.get("chosen"), r.get("rejected")) for r in existing}
+        rows = [r for r in rows if (r["prompt"], r["chosen"], r["rejected"]) not in seen]
+        counts[split] = _write_jsonl(path, [*existing, *rows])
+    counts["oasst1_pairs"] = sum(len(rows) for rows in rows_by_split.values())
+    return counts
+
+
 def _prepare_reward(root: Path, output: Path) -> dict[str, Any]:
     source = root / "HuggingFaceH4--ultrafeedback_binarized"
     counts: dict[str, int] = {}
@@ -253,6 +336,7 @@ def main() -> None:
         "reward": _prepare_reward(root, output),
         "provider": _prepare_provider(root, output),
     }
+    report["reward_oasst1"] = _prepare_reward_oasst1(root, output)
     write_json(output / "preparation_report.json", report)
     print(json.dumps(report, indent=2))
 
