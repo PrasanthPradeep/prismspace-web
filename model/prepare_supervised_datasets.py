@@ -110,6 +110,43 @@ def _prepare_success(root: Path, output: Path) -> dict[str, Any]:
     return {split: _write_jsonl(output / "success" / f"{split}.jsonl", rows) for split, rows in rows_by_split.items()}
 
 
+def _prepare_sft_envfactory(root: Path, output: Path) -> dict[str, Any]:
+    """Build SFT chat rows from EnvFactory-RL tool-use trajectories.
+
+    Each record has a user prompt plus a ground-truth tool-call sequence but
+    no negative, so it feeds supervised fine-tuning (not ORPO): the assistant
+    message is the ground-truth call list in ReAct JSON form.
+    """
+    source = root / "EnvFactory-RL" / "env_factory_rl.json"
+    if not source.exists():
+        return {"train": 0, "test": 0, "reason": "env_factory_rl.json not found"}
+    records = json.loads(source.read_text(encoding="utf-8"))
+    rows_by_split: dict[str, list[dict[str, Any]]] = {"train": [], "test": []}
+    for record in records:
+        try:
+            prompt_msgs = json.loads(record.get("prompt", "[]"))
+            calls = json.loads(record.get("reward_model", {}).get("ground_truth", "[]"))
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(prompt_msgs, list) or not prompt_msgs or not calls:
+            continue
+        user_text = _first_user_message(prompt_msgs)
+        if not user_text.strip():
+            continue
+        assistant_text = "\n".join(
+            json.dumps({"tool": c.get("name"), "arguments": c.get("arguments", {})}, ensure_ascii=False)
+            for c in calls if isinstance(c, dict) and c.get("name")
+        )
+        if not assistant_text:
+            continue
+        messages = [
+            {"role": "user", "content": user_text},
+            {"role": "assistant", "content": assistant_text},
+        ]
+        rows_by_split[_split_group(user_text[:64])].append({"messages": messages})
+    return {split: _write_jsonl(output / "sft_envfactory" / f"{split}.jsonl", rows) for split, rows in rows_by_split.items()}
+
+
 def _prepare_reward_oasst1(root: Path, output: Path) -> dict[str, Any]:
     """Append OASST1 ranked-sibling pairs to curated reward files.
 
@@ -337,6 +374,7 @@ def main() -> None:
         "provider": _prepare_provider(root, output),
     }
     report["reward_oasst1"] = _prepare_reward_oasst1(root, output)
+    report["sft_envfactory"] = _prepare_sft_envfactory(root, output)
     write_json(output / "preparation_report.json", report)
     print(json.dumps(report, indent=2))
 
