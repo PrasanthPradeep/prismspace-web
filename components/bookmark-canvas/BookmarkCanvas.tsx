@@ -39,7 +39,7 @@ import { useCanvas } from '@/hooks/bookmark-canvas/useCanvas';
 import { useKeyboardShortcuts } from '@/hooks/bookmark-canvas/useKeyboardShortcuts';
 import type { Bookmark, BookmarkFormData, ContextMenuState } from '@/lib/bookmark-canvas/types';
 import { DEFAULT_CANVAS_BG, isLightColor } from '@/lib/bookmark-canvas/types';
-import { copyToClipboard } from '@/lib/bookmark-canvas/utils';
+import { copyToClipboard, isValidUrl } from '@/lib/bookmark-canvas/utils';
 
 export function BookmarkCanvas() {
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -241,6 +241,10 @@ export function BookmarkCanvas() {
 
       switch (action) {
         case 'open':
+          if (!isValidUrl(bm.url)) {
+            toast.error('This bookmark has an invalid URL');
+            break;
+          }
           await recordVisit(id);
           window.open(bm.url, '_blank', 'noopener,noreferrer');
           break;
@@ -280,6 +284,10 @@ export function BookmarkCanvas() {
   const handleCardDoubleClick = useCallback(
     async (bookmark: Bookmark) => {
       if (!bookmark.id) return;
+      if (!isValidUrl(bookmark.url)) {
+        toast.error('This bookmark has an invalid URL');
+        return;
+      }
       await recordVisit(bookmark.id);
       window.open(bookmark.url, '_blank', 'noopener,noreferrer');
     },

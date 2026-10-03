@@ -2,6 +2,7 @@
  * Copyright 2026 Nobin Sijo (NobinSijo7T).
  * SPDX-License-Identifier: Apache-2.0
  */
+import { capturePrismEvent } from '@/lib/posthog-client';
 /**
  * lib/agent-swarm-client.ts
  * ─────────────────────────
@@ -174,17 +175,20 @@ export async function approveAgent(
     body: JSON.stringify({ approved, message }),
   });
   if (!res.ok) throw new Error(`Approval failed: ${res.status}`);
+  capturePrismEvent('agent_approval_decided', { approved });
 }
 
 export async function deleteAgent(id: string): Promise<void> {
   const res = await fetch(`${BASE}/agents/${id}`, { method: 'DELETE' });
   if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
+  capturePrismEvent('agent_deleted');
 }
 
 export async function cancelAgentOperation(id: string): Promise<boolean> {
   const res = await fetch(`${BASE}/agents/${id}/cancel-operation`, { method: 'POST' });
   if (!res.ok) throw new Error(`Operation cancellation failed: ${res.status}`);
   const data = await res.json();
+  capturePrismEvent('agent_operation_cancelled', { cancelled: Boolean(data.cancelled) });
   return Boolean(data.cancelled);
 }
 

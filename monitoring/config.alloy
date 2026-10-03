@@ -1,0 +1,58 @@
+// PrismSpace remote metrics collector.
+// Deploy this collector on an always-on Render/Railway service or run it locally.
+// It scrapes the configured public /metrics endpoints and forwards samples to Grafana Cloud.
+
+logging {
+  level  = "info"
+  format = "logfmt"
+}
+
+prometheus.remote_write "grafana_cloud" {
+  endpoint {
+    url = sys.env("GRAFANA_CLOUD_PROMETHEUS_URL")
+
+    basic_auth {
+      username = sys.env("GRAFANA_CLOUD_PROMETHEUS_USER")
+      password = sys.env("GRAFANA_CLOUD_API_KEY")
+    }
+  }
+}
+
+// Render target. Set RENDER_METRICS_HOST to host:port, for example:
+// api.onrender.com:443
+prometheus.scrape "render" {
+  targets = [{
+    "__address__"      = sys.env("RENDER_METRICS_HOST"),
+    "__scheme__"       = "https",
+    "__metrics_path__" = "/metrics",
+    "platform"         = "render",
+  }]
+  bearer_token = sys.env("RENDER_METRICS_TOKEN")
+  forward_to   = [prometheus.remote_write.grafana_cloud.receiver]
+}
+
+// Railway target. Set RAILWAY_METRICS_HOST to host:port, for example:
+// api-production.up.railway.app:443
+prometheus.scrape "railway" {
+  targets = [{
+    "__address__"      = sys.env("RAILWAY_METRICS_HOST"),
+    "__scheme__"       = "https",
+    "__metrics_path__" = "/metrics",
+    "platform"         = "railway",
+  }]
+  bearer_token = sys.env("RAILWAY_METRICS_TOKEN")
+  forward_to   = [prometheus.remote_write.grafana_cloud.receiver]
+}
+
+// Cloudflare Quick Tunnel target. Its hostname changes whenever the tunnel restarts,
+// so set CLOUDFLARE_METRICS_HOST each time. Use this for temporary testing only.
+prometheus.scrape "cloudflare_quick_tunnel" {
+  targets = [{
+    "__address__"      = sys.env("CLOUDFLARE_METRICS_HOST"),
+    "__scheme__"       = "https",
+    "__metrics_path__" = "/metrics",
+    "platform"         = "cloudflare_quick_tunnel",
+  }]
+  bearer_token = sys.env("CLOUDFLARE_METRICS_TOKEN")
+  forward_to   = [prometheus.remote_write.grafana_cloud.receiver]
+}

@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from backend.model_inference import analyze_request, get_status
+from backend.observability import install_metrics, model_request_metrics
 
 
 class PredictionRequest(BaseModel):
@@ -43,6 +44,7 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type", "X-Model-API-Key"],
 )
+install_metrics(app)
 
 
 @app.get("/health")
@@ -58,11 +60,13 @@ def models() -> dict[str, object]:
 
 @app.post("/predict", dependencies=[Depends(require_api_key)])
 def predict(payload: PredictionRequest) -> dict[str, object]:
-    return analyze_request(payload.text).to_dict()
+    with model_request_metrics("predict"):
+        return analyze_request(payload.text).to_dict()
 
 
 @app.get("/api/intelligence", dependencies=[Depends(require_api_key)])
 def intelligence(
     text: Annotated[str, Query(min_length=1, max_length=100_000)],
 ) -> dict[str, object]:
-    return analyze_request(text).to_dict()
+    with model_request_metrics("intelligence"):
+        return analyze_request(text).to_dict()

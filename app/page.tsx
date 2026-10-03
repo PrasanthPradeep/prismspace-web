@@ -14,6 +14,7 @@ import { TopLogo } from '@/components/TopLogo';
 import { TopQuote } from '@/components/TopQuote';
 import { QuickActions } from '@/components/QuickActions';
 import { usePanelManager } from '@/components/use-panel-manager';
+import { capturePrismEvent } from '@/lib/posthog-client';
 
 const SettingsModal = dynamic(
   () => import('@/components/SettingsModal').then((module) => module.SettingsModal),
@@ -46,6 +47,8 @@ export default function Home() {
   }, [openPanel]);
 
   const handleToolAction = (action: string) => {
+    capturePrismEvent('tool_opened', { tool: action });
+
     // Handle system stats specially
     if (action === 'system-stats') {
       const ramInfo = document.getElementById('ram-usage')?.textContent || 'N/A';

@@ -7,6 +7,7 @@ import "./globals.css";
 import { cn } from "@/lib/utils";
 import { BackgroundManager } from "@/components/BackgroundManager";
 import { DynamicIsland } from "@/components/DynamicIsland";
+import { PostHogProvider } from "@/components/PostHogProvider";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/site-config";
 
 export const metadata: Metadata = {
@@ -73,9 +74,11 @@ export default function RootLayout({
             }),
           }}
         />
-        <DynamicIsland />
-        <BackgroundManager />
-        {children}
+        <PostHogProvider>
+          <DynamicIsland />
+          <BackgroundManager />
+          {children}
+        </PostHogProvider>
       </body>
     </html>
   );

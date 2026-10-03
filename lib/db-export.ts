@@ -9,6 +9,10 @@
 import { exportDB, importDB, importInto } from 'dexie-export-import';
 import { db } from './db';
 
+// Backups are user-supplied files. Keep parsing and restore bounded so a
+// malformed file cannot cause an avoidable memory/storage denial of service.
+const MAX_BACKUP_FILE_BYTES = 50 * 1024 * 1024;
+
 export interface ExportResult {
   success: boolean;
   message: string;
@@ -90,6 +94,15 @@ export async function importAllData(
   }
 ): Promise<ImportResult> {
   try {
+    const validation = await validateBackupFile(file);
+    if (!validation.valid) {
+      return {
+        success: false,
+        message: validation.message,
+        error: validation.message
+      };
+    }
+
     // Read file as Blob
     const blob = new Blob([await file.arrayBuffer()], { type: 'application/json' });
 
@@ -233,25 +246,37 @@ export async function validateBackupFile(file: File): Promise<{
   };
 }> {
   try {
+    if (file.size > MAX_BACKUP_FILE_BYTES) {
+      return {
+        valid: false,
+        message: 'Backup file is too large (maximum 50 MB)'
+      };
+    }
+
     const text = await file.text();
     const data = JSON.parse(text);
 
     // Check if it's a Dexie export format
-    if (!data.databaseName || !data.tables) {
+    if (!data || typeof data !== 'object' || data.databaseName !== db.name || !Array.isArray(data.tables)) {
       return {
         valid: false,
         message: 'Invalid backup file format'
       };
     }
 
-    if (data.databaseName !== db.name) {
+    const knownTables = new Set(db.tables.map((table) => table.name));
+    const tableNames = data.tables.map((table: unknown) => {
+      if (!table || typeof table !== 'object') return null;
+      const name = (table as { name?: unknown }).name;
+      return typeof name === 'string' ? name : null;
+    });
+
+    if (tableNames.some((name: string | null) => !name || !knownTables.has(name))) {
       return {
         valid: false,
-        message: `Backup is for database "${data.databaseName}", but current database is "${db.name}"`
+        message: 'Backup contains unknown or invalid tables'
       };
     }
-
-    const tableNames = data.tables.map((t: any) => t.name);
 
     return {
       valid: true,

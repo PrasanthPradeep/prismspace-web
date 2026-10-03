@@ -1,7 +1,7 @@
 % Copyright 2026 Nobin Sijo (NobinSijo7T).
 % SPDX-License-Identifier: Apache-2.0
 \documentclass[10pt,a4paper]{article}
-\usepackage[margin=0.5in]{geometry}
+\usepackage[top=0.38in,bottom=0.38in,left=0.48in,right=0.48in]{geometry}
 \usepackage{amsmath,amssymb}
 \usepackage{tikz}
 \usetikzlibrary{shapes.geometric,arrows.meta,positioning,calc,fit,backgrounds}
@@ -13,7 +13,7 @@
 \begin{document}
 
 \begin{center}
-{\LARGE \textbf{Figure 4.1: Framework of PrismSpace Multi-Agent System}}\\[1.2em]
+{\Large \textbf{Figure 4.1: Framework of PrismSpace Multi-Agent System}}\\[0.8em]
 
 \begin{tikzpicture}[
     auto,
@@ -433,90 +433,93 @@
     % DEDICATED EXPANDED DETAIL CALLOUT PANEL: 4-HEAD ATTENTION ARCHITECTURE
     % =========================================================================
     
-    % Header of Detail Panel (generous gap below container_botleft)
-    \node [box, fill=black!10, text width=14.2cm, minimum height=0.42cm, font=\footnotesize\bfseries] (mha_hdr) at (1.45, -7.50) {
+    % Header of Detail Panel (Crisp single-line title with MHA formula)
+    \node [box, fill=black!10, text width=14.8cm, minimum height=0.44cm, font=\fontsize{7.2}{8.5}\selectfont\bfseries] (mha_hdr) at (1.50, -7.16) {
         Expanded Detail: 4-Head Multi-Head Attention Architecture $\quad \left[\mathrm{MHA}(\mathbf{x}) = \mathrm{Concat}(\mathrm{head}_1, \dots, \mathrm{head}_4)\mathbf{W}^O + \mathbf{x}\right]$
     };
 
-    % 1. Input representation
-    \node [box, fill=white, text width=1.90cm, minimum height=2.55cm, font=\scriptsize] (mha_in) at (-4.75, -9.14) {
-        \textbf{Feature Vector}\\[0.18em]
-        $\mathbf{x} \in \mathbb{R}^{d_{\text{model}}}$\\[0.35em]
-        {\tiny
-        \textbullet~Task Semantic Embed\\[0.15em]
-        \textbullet~Swarm Graph $\mathcal{G}$\\[0.15em]
-        \textbullet~Cost / Latency Specs}
+    % 1. Input representation (Expanded size & clear typography)
+    \node [box, fill=white, text width=2.15cm, minimum height=3.30cm, align=center] (mha_in) at (-4.75, -9.11) {
+        \textbf{Feature Vector}\\[0.22em]
+        $\mathbf{x} \in \mathbb{R}^{d_{\text{model}}}$\\[0.45em]
+        {\fontsize{5.5}{6.5}\selectfont
+        \begin{tabular}{@{}l@{}}
+        $\bullet$ Task Semantic Embed\\[0.22em]
+        $\bullet$ Swarm Graph $\mathcal{G}$\\[0.22em]
+        $\bullet$ Cost / Latency Specs
+        \end{tabular}}
     };
 
-    % 2. Linear Projections Q, K, V (comfortable vertical spacing between formulas)
-    \node [box, fill=white, text width=1.55cm, minimum height=2.55cm, font=\scriptsize] (mha_proj) at (-2.55, -9.14) {
-        \textbf{Linear Proj.}\\[0.32em]
-        $\mathbf{Q}_i = \mathbf{x}\mathbf{W}_i^Q$\\[0.36em]
-        $\mathbf{K}_i = \mathbf{x}\mathbf{W}_i^K$\\[0.36em]
-        $\mathbf{V}_i = \mathbf{x}\mathbf{W}_i^V$\\[0.36em]
-        {\tiny $\mathbf{W}_i \in \mathbb{R}^{d \times d_k}$}
+    % 2. Linear Projections Q, K, V (Expanded size & comfortable spacing)
+    \node [box, fill=white, text width=1.85cm, minimum height=3.30cm, align=center] (mha_proj) at (-2.35, -9.11) {
+        \textbf{Linear Proj.}\\[0.35em]
+        $\mathbf{Q}_i = \mathbf{x}\mathbf{W}_i^Q$\\[0.32em]
+        $\mathbf{K}_i = \mathbf{x}\mathbf{W}_i^K$\\[0.32em]
+        $\mathbf{V}_i = \mathbf{x}\mathbf{W}_i^V$\\[0.42em]
+        {\fontsize{5.5}{6.5}\selectfont $\mathbf{W}_i \in \mathbb{R}^{d \times d_k}$}
     };
     \draw [arrow] (mha_in) -- (mha_proj);
 
-    % 3. Four Parallel Specialized Attention Heads (spacious 2-line layout, generous arrow space)
-    \node [box, fill=white, text width=4.90cm, minimum height=0.54cm, font=\fontsize{4.8}{5.8}\selectfont] (head1) at (1.45, -8.15) {
-        \textbf{Head 1: Task Intent \& Query Semantics}\\[0.08em]
+    % 3. Four Parallel Specialized Attention Heads (Substantially enlarged with spacious heights & fonts)
+    \node [box, fill=white, text width=5.20cm, minimum height=0.72cm, font=\fontsize{6.0}{7.2}\selectfont] (head1) at (1.50, -7.85) {
+        \textbf{Head 1: Task Intent \& Query Semantics}\\[0.10em]
         $\mathrm{Attn}_1 = \mathrm{softmax}\big(\mathbf{Q}_1\mathbf{K}_1^T / \sqrt{d_k}\big)\mathbf{V}_1$
     };
-    \node [box, fill=white, text width=4.90cm, minimum height=0.54cm, font=\fontsize{4.8}{5.8}\selectfont] (head2) at (1.45, -8.81) {
-        \textbf{Head 2: Model Capability \& Context Window}\\[0.08em]
+    \node [box, fill=white, text width=5.20cm, minimum height=0.72cm, font=\fontsize{6.0}{7.2}\selectfont] (head2) at (1.50, -8.69) {
+        \textbf{Head 2: Model Capability \& Context Window}\\[0.10em]
         $\mathrm{Attn}_2 = \mathrm{softmax}\big(\mathbf{Q}_2\mathbf{K}_2^T / \sqrt{d_k}\big)\mathbf{V}_2$
     };
-    \node [box, fill=white, text width=4.90cm, minimum height=0.54cm, font=\fontsize{4.8}{5.8}\selectfont] (head3) at (1.45, -9.47) {
-        \textbf{Head 3: Swarm Persona \& Tool Affinity}\\[0.08em]
+    \node [box, fill=white, text width=5.20cm, minimum height=0.72cm, font=\fontsize{6.0}{7.2}\selectfont] (head3) at (1.50, -9.53) {
+        \textbf{Head 3: Swarm Persona \& Tool Affinity}\\[0.10em]
         $\mathrm{Attn}_3 = \mathrm{softmax}\big(\mathbf{Q}_3\mathbf{K}_3^T / \sqrt{d_k}\big)\mathbf{V}_3$
     };
-    \node [box, fill=white, text width=4.90cm, minimum height=0.54cm, font=\fontsize{4.8}{5.8}\selectfont] (head4) at (1.45, -10.13) {
-        \textbf{Head 4: Safety Constraints \& Latency Budget}\\[0.08em]
+    \node [box, fill=white, text width=5.20cm, minimum height=0.72cm, font=\fontsize{6.0}{7.2}\selectfont] (head4) at (1.50, -10.37) {
+        \textbf{Head 4: Safety Constraints \& Latency Budget}\\[0.10em]
         $\mathrm{Attn}_4 = \mathrm{softmax}\big(\mathbf{Q}_4\mathbf{K}_4^T / \sqrt{d_k}\big)\mathbf{V}_4$
     };
 
-    % Projections to Heads Fan-out (clear 7.5mm gap, clean uncrowded arrows)
-    \draw [-{Stealth[scale=0.45]}, line width=0.5pt, black!85] (mha_proj.east) -- (head1.west);
-    \draw [-{Stealth[scale=0.45]}, line width=0.5pt, black!85] (mha_proj.east) -- (head2.west);
-    \draw [-{Stealth[scale=0.45]}, line width=0.5pt, black!85] (mha_proj.east) -- (head3.west);
-    \draw [-{Stealth[scale=0.45]}, line width=0.5pt, black!85] (mha_proj.east) -- (head4.west);
+    % Projections to Heads Fan-out (balanced gaps & clean arrows)
+    \draw [-{Stealth[scale=0.52]}, line width=0.55pt, black!85] (mha_proj.east) -- (head1.west);
+    \draw [-{Stealth[scale=0.52]}, line width=0.55pt, black!85] (mha_proj.east) -- (head2.west);
+    \draw [-{Stealth[scale=0.52]}, line width=0.55pt, black!85] (mha_proj.east) -- (head3.west);
+    \draw [-{Stealth[scale=0.52]}, line width=0.55pt, black!85] (mha_proj.east) -- (head4.west);
 
-    % 4. Concat and Multi-Head Projection (generous width: zero clipping/overfull hbox)
-    \node [box, fill=white, text width=1.85cm, minimum height=2.55cm, font=\scriptsize] (mha_concat) at (5.35, -9.14) {
-        \textbf{Concat} $\mathbf{W}^O$\\[0.28em]
-        {\fontsize{4.2}{5.2}\selectfont $[\mathbf{H}_1 \dots \mathbf{H}_4]\mathbf{W}^O$}\\[0.35em]
-        {\scriptsize Multi-Head}\\[0.1em]
-        {\scriptsize Projection}
+    % 4. Concat and Multi-Head Projection (Expanded size & clear typography)
+    \node [box, fill=white, text width=2.05cm, minimum height=3.30cm, align=center] (mha_concat) at (5.55, -9.11) {
+        \textbf{Concat} $\mathbf{W}^O$\\[0.35em]
+        {\fontsize{5.5}{6.5}\selectfont $[\mathbf{H}_1 \dots \mathbf{H}_4]\mathbf{W}^O$}\\[0.42em]
+        \textbf{Multi-Head}\\[0.14em]
+        \textbf{Projection}\\[0.35em]
+        {\fontsize{5.2}{6.2}\selectfont $\mathbf{W}^O \in \mathbb{R}^{4d_k \times d}$}
     };
-    \draw [-{Stealth[scale=0.45]}, line width=0.5pt, black!85] (head1.east) -- (mha_concat.west);
-    \draw [-{Stealth[scale=0.45]}, line width=0.5pt, black!85] (head2.east) -- (mha_concat.west);
-    \draw [-{Stealth[scale=0.45]}, line width=0.5pt, black!85] (head3.east) -- (mha_concat.west);
-    \draw [-{Stealth[scale=0.45]}, line width=0.5pt, black!85] (head4.east) -- (mha_concat.west);
+    \draw [-{Stealth[scale=0.52]}, line width=0.55pt, black!85] (head1.east) -- (mha_concat.west);
+    \draw [-{Stealth[scale=0.52]}, line width=0.55pt, black!85] (head2.east) -- (mha_concat.west);
+    \draw [-{Stealth[scale=0.52]}, line width=0.55pt, black!85] (head3.east) -- (mha_concat.west);
+    \draw [-{Stealth[scale=0.52]}, line width=0.55pt, black!85] (head4.east) -- (mha_concat.west);
 
-    % 5. Add & LayerNorm (clear 6mm gaps, spacious arrow clearance)
-    \node [circle, draw=black!85, fill=white, inner sep=0pt, minimum size=0.40cm, font=\footnotesize\bfseries] (mha_add) at (6.80, -9.14) {+};
-    \node [box, fill=black!14, text width=1.30cm, minimum height=0.85cm, font=\scriptsize] (mha_norm) at (8.15, -9.14) {
-        \textbf{LayerNorm}\\[0.15em]
-        {\tiny Output $\mathbf{x}_{\text{out}}$}
+    % 5. Add & LayerNorm (Expanded size with comfortable clearances)
+    \node [circle, draw=black!85, fill=white, inner sep=0pt, minimum size=0.46cm, font=\footnotesize\bfseries] (mha_add) at (7.05, -9.11) {+};
+    \node [box, fill=black!14, text width=1.48cm, minimum height=1.05cm, align=center] (mha_norm) at (8.25, -9.11) {
+        \textbf{LayerNorm}\\[0.20em]
+        {\fontsize{5.5}{6.5}\selectfont Output $\mathbf{x}_{\text{out}}$}
     };
     \draw [arrow] (mha_concat) -- (mha_add);
     \draw [arrow] (mha_add) -- (mha_norm);
 
     % Residual Skip inside Detail Panel
-    \coordinate (res_pt_bot) at (-4.75, -10.75);
-    \draw [arrow] (mha_in.south) -- (res_pt_bot) -| node[pos=0.45, below, font=\fontsize{4.8}{5.8}\selectfont\itshape, text=black!75]{Residual Skip Connection $\mathbf{x}$} (mha_add.south);
+    \coordinate (res_pt_bot) at (-4.75, -11.15);
+    \draw [arrow] (mha_in.south) -- (res_pt_bot) -| node[pos=0.45, below, font=\fontsize{5.5}{6.5}\selectfont\itshape, text=black!75]{Residual Skip Connection $\mathbf{x}$} (mha_add.south);
 
-    % Detail Box Container: Solid sleek boundary (distinguished from outer dashed boundaries)
-    \coordinate (detail_bot_pad) at (-4.75, -11.20);
+    % Detail Box Container: Solid sleek boundary
+    \coordinate (detail_bot_pad) at (-4.75, -11.55);
     \begin{scope}[on background layer]
-        \node [draw=black!70, line width=0.65pt, fill=black!2, rounded corners=5pt, fit=(mha_hdr) (mha_in) (mha_norm) (detail_bot_pad), inner xsep=0.25cm, inner ysep=0.20cm] (detail_box) {};
+        \node [draw=black!70, line width=0.65pt, fill=black!2, rounded corners=5pt, fit=(mha_hdr) (mha_in) (mha_norm) (detail_bot_pad), inner xsep=0.22cm, inner ysep=0.18cm] (detail_box) {};
     \end{scope}
 
-    % Callout connector line from 4-Head Attention to Expanded Detail Panel (zero overlapping, correct downward arrowhead)
+    % Callout connector line from 4-Head Attention to Expanded Detail Panel
     \coordinate (c_callout_corner1) at (9.40, 0 |- lbl_attn3.east);
     \coordinate (c_callout_corner2) at (9.40, -6.65);
-    \coordinate (c_callout_target) at (7.60, 0 |- detail_box.north);
+    \coordinate (c_callout_target) at (7.50, 0 |- detail_box.north);
     \draw [draw=black!75, line width=0.75pt, dashed, -{Stealth[scale=0.85]}] 
         (lbl_attn3.east) -- (c_callout_corner1) -- (c_callout_corner2) -| 
         (c_callout_target);
@@ -527,7 +530,7 @@
     % =========================================================================
     % SYSTEM INPUT (TOP) — Overall entry point, positioned above the diagram
     % =========================================================================
-    \node [box, fill=black!22, text width=15.5cm, minimum height=0.9cm, above=0.65cm of outer_all] (sys_input) {
+    \node [box, fill=black!22, text width=15.5cm, minimum height=0.85cm, above=0.45cm of outer_all] (sys_input) {
         {\normalsize\bfseries \ding{220}~INPUT: User Natural Language Query, Task Objective \& Session Context}\\[0.1em]
         \scriptsize Chat Prompt $\;\vert\;$ Multi-Turn Conversation History $\;\vert\;$ Workspace Files $\;\vert\;$ User Policy $\;\vert\;$ Agent Instructions
     };
@@ -536,7 +539,7 @@
     % =========================================================================
     % SYSTEM OUTPUT (BOTTOM) — Overall exit point, positioned below the diagram
     % =========================================================================
-    \node [box, fill=black!22, text width=15.5cm, minimum height=0.9cm, below=0.65cm of outer_all] (sys_output) {
+    \node [box, fill=black!22, text width=15.5cm, minimum height=0.85cm, below=0.45cm of outer_all] (sys_output) {
         {\normalsize\bfseries OUTPUT: Streamed AI Response, Verified Deliverables \& Persisted State~\ding{220}}\\[0.1em]
         \scriptsize Real-Time SSE Token Stream $\;\vert\;$ Swarm Telemetry HUD $\;\vert\;$ Verified Artifacts $\;\vert\;$ IndexedDB (\texttt{PrismDB}) Persistence $\;\vert\;$ UI Re-render
     };
@@ -544,14 +547,14 @@
 
 \end{tikzpicture}
 
-\vspace{0.6em}
+\vspace{0.4em}
 \noindent\begin{minipage}{\textwidth}
 \centering
 \fcolorbox{black!50}{black!2}{
-\parbox{\dimexpr\textwidth-2\fboxsep-2\fboxrule\relax}{
+\parbox{\dimexpr\textwidth-2\fboxsep-2\fboxrule-6pt\relax}{
 \scriptsize
-\textbf{Glossary of Terms \& Abbreviations:}\\[0.25em]
-\begin{tabular}{@{}p{0.48\linewidth}@{\hspace{0.03\linewidth}}p{0.48\linewidth}@{}}
+\textbf{Glossary of Terms \& Abbreviations:}\\[0.22em]
+\begin{tabular}{@{}p{0.46\linewidth}@{\hspace{0.04\linewidth}}p{0.48\linewidth}@{}}
 $\bullet$ \textbf{LMSYS}: Large Model Systems Organization (collaborative AI benchmark arena). & $\bullet$ \textbf{ROC-AUC}: Area Under Receiver Operating Characteristic Curve.\\
 $\bullet$ \textbf{TF-IDF}: Term Frequency--Inverse Document Frequency (lexical feature extraction). & $\bullet$ \textbf{ECE}: Expected Calibration Error (gap between confidence and real accuracy).\\
 $\bullet$ \textbf{OOD}: Out-Of-Distribution (IsolationForest outlier/novelty detection). & $\bullet$ \textbf{MHA}: Multi-Head Attention (parallel attention heads for distinct task aspects).\\
