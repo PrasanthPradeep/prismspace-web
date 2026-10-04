@@ -110,126 +110,6 @@ def _prepare_success(root: Path, output: Path) -> dict[str, Any]:
     return {split: _write_jsonl(output / "success" / f"{split}.jsonl", rows) for split, rows in rows_by_split.items()}
 
 
-def _prepare_sft_envfactory(root: Path, output: Path) -> dict[str, Any]:
-    """Build SFT chat rows from EnvFactory-RL tool-use trajectories.
-
-    Each record has a user prompt plus a ground-truth tool-call sequence but
-    no negative, so it feeds supervised fine-tuning (not ORPO): the assistant
-    message is the ground-truth call list in ReAct JSON form.
-    """
-    source = root / "EnvFactory-RL" / "env_factory_rl.json"
-    if not source.exists():
-        return {"train": 0, "test": 0, "reason": "env_factory_rl.json not found"}
-    records = json.loads(source.read_text(encoding="utf-8"))
-    rows_by_split: dict[str, list[dict[str, Any]]] = {"train": [], "test": []}
-    for record in records:
-        try:
-            prompt_msgs = json.loads(record.get("prompt", "[]"))
-            calls = json.loads(record.get("reward_model", {}).get("ground_truth", "[]"))
-        except json.JSONDecodeError:
-            continue
-        if not isinstance(prompt_msgs, list) or not prompt_msgs or not calls:
-            continue
-        user_text = _first_user_message(prompt_msgs)
-        if not user_text.strip():
-            continue
-        assistant_text = "\n".join(
-            json.dumps({"tool": c.get("name"), "arguments": c.get("arguments", {})}, ensure_ascii=False)
-            for c in calls if isinstance(c, dict) and c.get("name")
-        )
-        if not assistant_text:
-            continue
-        messages = [
-            {"role": "user", "content": user_text},
-            {"role": "assistant", "content": assistant_text},
-        ]
-        rows_by_split[_split_group(user_text[:64])].append({"messages": messages})
-    return {split: _write_jsonl(output / "sft_envfactory" / f"{split}.jsonl", rows) for split, rows in rows_by_split.items()}
-
-
-def _prepare_reward_oasst1(root: Path, output: Path) -> dict[str, Any]:
-    """Append OASST1 ranked-sibling pairs to curated reward files.
-
-    Siblings sharing (tree, parent) with distinct ranks form
-    chosen (lowest rank) / rejected (highest rank) pairs; the prompt is the
-    conversation path from the tree root to the parent message.
-    """
-    source = root / "oasst1"
-    files = sorted(source.glob("**/train-*.parquet")) + sorted(source.glob("**/validation-*.parquet"))
-    if not files:
-        return {"train": 0, "test": 0, "reason": "oasst1 parquet not found"}
-    frame = pd.concat((pd.read_parquet(path) for path in files), ignore_index=True)
-
-    by_id: dict[str, dict[str, Any]] = {}
-    for record in frame.to_dict("records"):
-        mid = record.get("message_id")
-        if isinstance(mid, str):
-            by_id[mid] = record
-
-    def _path_text(parent_id: Any, depth: int = 6) -> str:
-        chain: list[str] = []
-        seen: set[str] = set()
-        current = parent_id
-        while isinstance(current, str) and current not in seen and len(chain) < depth:
-            seen.add(current)
-            node = by_id.get(current)
-            if not node:
-                break
-            text = str(node.get("text", "") or "").strip()
-            if text:
-                chain.append(f"{node.get('role', 'prompter')}: {text}")
-            current = node.get("parent_id")
-        return "\n".join(reversed(chain))
-
-    groups: dict[tuple[str, str], list[dict[str, Any]]] = {}
-    for record in frame.to_dict("records"):
-        if record.get("role") != "assistant" or record.get("deleted"):
-            continue
-        rank = record.get("rank")
-        try:
-            rank = float(rank)
-        except (TypeError, ValueError):
-            continue
-        text = str(record.get("text", "") or "").strip()
-        if not text:
-            continue
-        key = (str(record.get("message_tree_id")), str(record.get("parent_id")))
-        groups.setdefault(key, []).append({"rank": rank, "text": text, "parent": record.get("parent_id")})
-
-    rows_by_split: dict[str, list[dict[str, Any]]] = {"train": [], "test": []}
-    for (tree_id, parent_id), candidates in groups.items():
-        ranks = {c["rank"] for c in candidates}
-        if len(ranks) < 2:
-            continue
-        ordered = sorted(candidates, key=lambda c: c["rank"])
-        prompt = _path_text(parent_id)
-        if not prompt.strip():
-            continue
-        rows_by_split[_split_group(f"{tree_id}:{parent_id}")].append({
-            "prompt": prompt,
-            "chosen": ordered[0]["text"],
-            "rejected": ordered[-1]["text"],
-        })
-
-    counts: dict[str, Any] = {}
-    for split, rows in rows_by_split.items():
-        path = output / "reward" / f"{split}.jsonl"
-        # NOTE: iterate raw lines — splitlines() would break on U+2028 etc.
-        # embedded in ultrafeedback texts.
-        existing: list[dict[str, Any]] = []
-        if path.exists():
-            with path.open(encoding="utf-8") as handle:
-                for line in handle:
-                    if line.strip():
-                        existing.append(json.loads(line))
-        # Idempotent reruns: skip oasst1 rows already merged in a prior run.
-        seen = {(r.get("prompt"), r.get("chosen"), r.get("rejected")) for r in existing}
-        rows = [r for r in rows if (r["prompt"], r["chosen"], r["rejected"]) not in seen]
-        counts[split] = _write_jsonl(path, [*existing, *rows])
-    counts["oasst1_pairs"] = sum(len(rows) for rows in rows_by_split.values())
-    return counts
-
-
 def _prepare_reward(root: Path, output: Path) -> dict[str, Any]:
     source = root / "HuggingFaceH4--ultrafeedback_binarized"
     counts: dict[str, int] = {}
@@ -245,6 +125,78 @@ def _prepare_reward(root: Path, output: Path) -> dict[str, Any]:
             if str(prompt).strip() and _conversation_text(chosen).strip() and _conversation_text(rejected).strip()
         )
         counts[destination] = _write_jsonl(output / "reward" / f"{destination}.jsonl", rows)
+    return counts
+
+
+def _prepare_envfactory_sft(root: Path, output: Path) -> dict[str, Any]:
+    """Convert EnvFactory verified trajectories into chat-style SFT rows."""
+    source = root / "EnvFactory-RL" / "env_factory_rl.json"
+    rows_by_split: dict[str, list[dict[str, Any]]] = {"train": [], "test": []}
+    if not source.exists():
+        return {split: 0 for split in rows_by_split}
+    records = json.loads(source.read_text(encoding="utf-8"))
+    for index, record in enumerate(records):
+        try:
+            prompt = json.loads(record["prompt"])
+            ground_truth = json.loads(record["reward_model"]["ground_truth"])
+        except (KeyError, TypeError, json.JSONDecodeError):
+            continue
+        if not isinstance(prompt, list) or not isinstance(ground_truth, list):
+            continue
+        messages = [item for item in prompt if isinstance(item, dict) and item.get("role") == "user"]
+        if not messages:
+            continue
+        messages.append({
+            "role": "assistant",
+            "content": json.dumps(ground_truth, ensure_ascii=False),
+        })
+        task_key = str(record.get("extra_info", {}).get("index", index))
+        rows_by_split[_split_group(task_key)].append({"messages": messages})
+    return {
+        split: _write_jsonl(output / "sft_envfactory" / f"{split}.jsonl", rows)
+        for split, rows in rows_by_split.items()
+    }
+
+
+def _prepare_oasst_pairs(root: Path, output: Path) -> dict[str, Any]:
+    """Convert ranked OASST1 replies into prompt/chosen/rejected preference pairs."""
+    source = root / "oasst1" / "data"
+    rows_by_split: dict[str, list[dict[str, Any]]] = {"train": [], "test": []}
+    files = sorted(source.glob("*.parquet"))
+    if not files:
+        return {split: 0 for split in rows_by_split}
+    frame = pd.concat((pd.read_parquet(path) for path in files), ignore_index=True)
+    assistants = frame[
+        (frame["role"] == "assistant")
+        & frame["rank"].notna()
+        & ~frame["deleted"].fillna(False)
+    ]
+    for tree_id, group in assistants.groupby("message_tree_id", sort=True):
+        replies = group.sort_values(["parent_id", "rank"])
+        for parent_id, siblings in replies.groupby("parent_id", sort=True):
+            if not isinstance(parent_id, str) or len(siblings) < 2:
+                continue
+            parent = frame[frame["message_id"] == parent_id]
+            if parent.empty:
+                continue
+            chosen = siblings.iloc[0]
+            rejected = siblings.iloc[-1]
+            if not str(chosen["text"]).strip() or not str(rejected["text"]).strip():
+                continue
+            row = {
+                "prompt": str(parent.iloc[0]["text"]),
+                "chosen": str(chosen["text"]),
+                "rejected": str(rejected["text"]),
+            }
+            rows_by_split[_split_group(str(tree_id))].append(row)
+    counts: dict[str, int] = {}
+    for split, rows in rows_by_split.items():
+        _write_jsonl(output / "reward" / f"oasst1_{split}.jsonl", rows)
+        merged_path = output / "reward" / f"{split}.jsonl"
+        with merged_path.open("a", encoding="utf-8") as handle:
+            for row in rows:
+                handle.write(json.dumps(row, ensure_ascii=False) + "\n")
+        counts[split] = len(rows)
     return counts
 
 
@@ -371,10 +323,10 @@ def main() -> None:
         "approval": _prepare_approval(root, output),
         "success": _prepare_success(root, output),
         "reward": _prepare_reward(root, output),
+        "sft_envfactory": _prepare_envfactory_sft(root, output),
+        "oasst1": _prepare_oasst_pairs(root, output),
         "provider": _prepare_provider(root, output),
     }
-    report["reward_oasst1"] = _prepare_reward_oasst1(root, output)
-    report["sft_envfactory"] = _prepare_sft_envfactory(root, output)
     write_json(output / "preparation_report.json", report)
     print(json.dumps(report, indent=2))
 
