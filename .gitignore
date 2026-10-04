@@ -52,8 +52,8 @@ __pycache__/
 # generated model data
 model/datasets/
 model/artifacts*/
-!model/artifacts/
-!model/artifacts/**
+model/artifacts/**
+model/**
 
 # LaTeX intermediate and log files
 *.log
