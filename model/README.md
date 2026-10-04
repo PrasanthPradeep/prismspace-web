@@ -217,8 +217,8 @@ ORPO needs paired `chosen` and `rejected` samples plus a separately selected, li
 
 ## License and contribution boundary
 
-PrismSpace-authored model source code is copyright © 2026 Nobin Sijo
-([NobinSijo7T](https://github.com/NobinSijo7T)) and is licensed under
+PrismSpace-authored model source code is copyright © 2026 Prism AI Labs and is
+licensed under
 [Apache-2.0](../LICENSE). This license applies only to PrismSpace-authored
 code and does not relicense third-party datasets, model weights, checkpoints,
 artifacts, or provider services.
@@ -226,7 +226,7 @@ artifacts, or provider services.
 Collaborators may contribute to Dev Space tools as described in
 [CONTRIBUTING.md](../CONTRIBUTING.md). Core AI/model architecture, training,
 weights, artifacts, datasets, routing, governance, and safety behavior are
-maintainer-controlled and require prior written authorization from Nobin Sijo.
+maintainer-controlled and require prior written authorization from Prism AI Labs.
 Authorized model contributions must include provenance, version, license,
 evaluation impact, and redistribution terms. Do not commit gated datasets,
 private telemetry, API keys, or uncleared model artifacts.
