@@ -602,6 +602,7 @@ export function AgentSwarm({ onClose }: AgentSwarmProps) {
 
   const logsEndRef = useRef<HTMLDivElement>(null);
   const cleanupLogStream = useRef<(() => void) | null>(null);
+  const prevSelectedStatusRef = useRef<{ id: string; status: SwarmAgent['status'] } | null>(null);
 
   const chatSessions = useLiveQuery(
     () => db.agent_chat_sessions.orderBy('updatedAt').reverse().toArray(),
@@ -1021,6 +1022,30 @@ export function AgentSwarm({ onClose }: AgentSwarmProps) {
 
     syncCompletedMessages().catch(console.error);
   }, [agents]);
+
+  // Auto-switch the inspector from Pipeline to Output when a run finishes
+  useEffect(() => {
+    const prev = prevSelectedStatusRef.current;
+    if (!selectedAgent) {
+      prevSelectedStatusRef.current = null;
+      return;
+    }
+
+    const changed = !prev || prev.id !== selectedAgent.id || prev.status !== selectedAgent.status;
+    if (changed) {
+      const switchedAgent = prev?.id !== selectedAgent.id;
+      const justFinished = !!prev && prev.id === selectedAgent.id && !isTerminal(prev.status);
+
+      if (isTerminal(selectedAgent.status) && selectedAgent.result && (switchedAgent || justFinished)) {
+        setInspectorTab('output');
+      } else if (switchedAgent && !isTerminal(selectedAgent.status)) {
+        setInspectorTab('dag');
+      }
+
+      prevSelectedStatusRef.current = { id: selectedAgent.id, status: selectedAgent.status };
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedAgent]);
 
   const activeAgents = agents.filter((agent) => !isTerminal(agent.status)).length;
   const completedAgents = agents.filter((agent) => agent.status === 'completed').length;
