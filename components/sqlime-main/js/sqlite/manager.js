@@ -207,4 +207,6 @@ function loadDbFromArrayBuffer(buf) {
     return db;
 }
 
-export default { init, save };
+const manager = { init, save };
+
+export default manager;
