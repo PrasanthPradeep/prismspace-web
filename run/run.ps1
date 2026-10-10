@@ -132,6 +132,37 @@ if ($Service -ne 'Frontend') {
     $venvPython = Join-Path $venvDir "Scripts\python.exe"
     $venvPip = Join-Path $venvDir "Scripts\pip.exe"
 
+    function Test-VenvHealthy {
+        if (-not (Test-Path $venvPython)) { return $false }
+        try {
+            & $venvPython -m pip --version *> $null
+        } catch {
+            return $false
+        }
+        if ($LASTEXITCODE -ne 0) { return $false }
+        $pyVer = (& $venvPython -c "import sys; print('%d.%d' % sys.version_info[:2])" 2>$null)
+        if (-not $pyVer) { return $false }
+        $cfgPath = Join-Path $venvDir "pyvenv.cfg"
+        if (Test-Path $cfgPath) {
+            $cfgText = Get-Content $cfgPath -Raw
+            if ($cfgText -match '(?m)^\s*version\s*=\s*([0-9.]+)') {
+                $cfgMm = (($Matches[1] -split '\.')[0..1]) -join '.'
+                if ($pyVer.Trim() -ne $cfgMm) { return $false }
+            }
+        }
+        return $true
+    }
+
+    if ((Test-Path $venvPython) -and -not (Test-VenvHealthy)) {
+        Write-Color "  [!] Virtual environment is broken or built for a different Python. Rebuilding..." [ConsoleColor]::Yellow
+        $venvBackup = "$venvDir.broken.$(Get-Date -Format 'yyyyMMddHHmmss')"
+        try {
+            Move-Item -Path $venvDir -Destination $venvBackup -ErrorAction Stop
+        } catch {
+            Remove-Item -Recurse -Force $venvDir -ErrorAction SilentlyContinue
+        }
+    }
+
     if (-not (Test-Path $venvPython)) {
         Write-Color "  [!] Creating Python virtual environment in backend\.venv..." [ConsoleColor]::Yellow
         Set-Location $BackendDir

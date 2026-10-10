@@ -130,25 +130,48 @@ else
 fi
 
 VENV_PYTHON=""
+VENV_PIP=""
 if [[ "$SERVICE" != "frontend" ]]; then
   VENV_DIR="$BACKEND_DIR/.venv"
-  if [[ -f "$VENV_DIR/Scripts/python.exe" ]]; then
-    VENV_PYTHON="$VENV_DIR/Scripts/python.exe"
-    VENV_PIP="$VENV_DIR/Scripts/pip.exe"
-  elif [[ -f "$VENV_DIR/bin/python" ]]; then
-    VENV_PYTHON="$VENV_DIR/bin/python"
-    VENV_PIP="$VENV_DIR/bin/pip"
-  else
-    echo -e "${YELLOW}  📦 Creating Python virtual environment in backend/.venv...${RESET}"
-    cd "$BACKEND_DIR"
-    "$PYTHON_CMD" -m venv "$VENV_DIR"
+
+  resolve_venv_paths() {
     if [[ -f "$VENV_DIR/Scripts/python.exe" ]]; then
       VENV_PYTHON="$VENV_DIR/Scripts/python.exe"
       VENV_PIP="$VENV_DIR/Scripts/pip.exe"
-    else
+    elif [[ -f "$VENV_DIR/bin/python" ]]; then
       VENV_PYTHON="$VENV_DIR/bin/python"
       VENV_PIP="$VENV_DIR/bin/pip"
+    else
+      VENV_PYTHON=""
+      VENV_PIP=""
     fi
+  }
+
+  venv_is_healthy() {
+    [[ -n "$VENV_PYTHON" ]] || return 1
+    "$VENV_PYTHON" -m pip --version >/dev/null 2>&1 || return 1
+    local py_ver cfg_ver cfg_mm
+    py_ver="$("$VENV_PYTHON" -c 'import sys; print("%d.%d" % sys.version_info[:2])' 2>/dev/null || true)"
+    cfg_ver="$(sed -n 's/^version *= *//p' "$VENV_DIR/pyvenv.cfg" 2>/dev/null | tr -d '[:space:]' || true)"
+    cfg_mm="$(printf '%s' "$cfg_ver" | awk -F. 'NF >= 2 { print $1 "." $2 }')"
+    [[ -n "$py_ver" ]] || return 1
+    [[ -z "$cfg_mm" || "$py_ver" == "$cfg_mm" ]] || return 1
+    return 0
+  }
+
+  resolve_venv_paths
+
+  if [[ -n "$VENV_PYTHON" ]] && ! venv_is_healthy; then
+    echo -e "${YELLOW}  ⚠️  Virtual environment is broken or built for a different Python. Rebuilding...${RESET}"
+    mv "$VENV_DIR" "$VENV_DIR.broken.$(date +%s)" 2>/dev/null || rm -rf "$VENV_DIR"
+    VENV_PYTHON=""
+    VENV_PIP=""
+  fi
+
+  if [[ -z "$VENV_PYTHON" ]]; then
+    echo -e "${YELLOW}  📦 Creating Python virtual environment in backend/.venv...${RESET}"
+    "$PYTHON_CMD" -m venv "$VENV_DIR"
+    resolve_venv_paths
     echo -e "${GREEN}  ✅ Virtual environment created.${RESET}"
   fi
 
