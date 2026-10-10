@@ -603,8 +603,8 @@ def _build_system_prompt() -> str:
     base += (
         "\n## Gmail MCP (per-user OAuth, LIVE)\n"
         "The user has connected their own Google account via OAuth. Use these tools when asked about email:\n"
-        '- `gmail_list_messages(query, max_results)` — e.g. {"tool":"gmail_list_messages","arguments":{"query":"is:unread","max_results":5}}\n'
-        '- `gmail_get_message(message_id, format)` — format metadata|full|minimal\n'
+        '- `gmail_list_messages(query, max_results)` — e.g. {"tool":"gmail_list_messages","arguments":{"query":"is:unread","max_results":5}}; returns readable lines "[N] <subject>" each with From:, Date:, Snippet: and id=<message_id>\n'
+        '- `gmail_get_message(message_id, format)` — returns readable headers + text body; pass the `id=` value returned by gmail_list_messages as `message_id`\n'
         '- `gmail_list_labels()` — list INBOX/SENT/etc.\n'
         '- `send_email(to, subject, body)` — sends a real email via the user\'s Gmail; use for send requests\n'
         "Emit exactly one JSON tool call then STOP.\n\n"
@@ -1481,9 +1481,52 @@ def _exec_memory(args: dict, operation: str) -> str:
     return f"Unknown memory operation: {operation}"
 
 
+def _gmail_msg_text(msg: dict) -> str:
+    """Extract readable plain text from a Gmail message dict (recursive payload)."""
+    import base64 as _b64
+    parts: list[tuple[str, str]] = []
+
+    def _walk(p: dict) -> None:
+        body = p.get("body") or {}
+        data = body.get("data") or ""
+        if data:
+            parts.append((str(p.get("mimeType", "") or ""), data))
+        for sub in (p.get("parts") or []):
+            _walk(sub)
+
+    _walk(msg.get("payload") or {})
+    text = ""
+    for mime, data in parts:
+        try:
+            content = _b64.urlsafe_b64decode(data + "=" * (-len(data) % 4)).decode("utf-8", "replace")
+        except Exception:
+            continue
+        if not content or not content.strip():
+            continue
+        if mime == "text/plain":
+            text = content
+            break
+        if mime == "text/html":
+            html = re.sub(r"(?is)<(script|style)[^>]*>.*?</\1>", " ", content)
+            html = re.sub(r"(?i)<br\s*/?>", "\n", html)
+            html = re.sub(r"(?i)</(p|div|li|tr|h[1-6])>", "\n", html)
+            text = re.sub(r"(?s)<[^>]+>", " ", html)
+            break
+    return re.sub(r"[ \t\r\n\f\v]+", " ", text).strip()
+
+
+def _gmail_headers(msg: dict) -> dict:
+    hdrs: dict[str, str] = {}
+    for h in ((msg.get("payload") or {}).get("headers") or []):
+        name = str(h.get("name", "")).lower()
+        hdrs[name] = str(h.get("value", ""))
+    return hdrs
+
+
 def _exec_gmail(tool: str, args: dict, user_id: Optional[str] = None) -> str:
     """Per-user Gmail executor. Uses the calling user's OAuth token, never the shared .env."""
     import httpx as _httpx
+    import concurrent.futures as _cf
     token: Optional[str] = None
     if _GMAIL_OAUTH_AVAILABLE and user_id:
         try:
@@ -1497,20 +1540,77 @@ def _exec_gmail(tool: str, args: dict, user_id: Optional[str] = None) -> str:
                 "(GET /api/auth/google/login) and complete OAuth first.")
     base = "https://gmail.googleapis.com/gmail/v1/users/me"
     hdr = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
+    def _fails(r) -> str:
+        if r.status_code == 401:
+            return "Gmail token expired. Reconnect via Connect Gmail."
+        return f"Gmail API error ({r.status_code}): {r.text[:300]}"
+
     try:
         if tool == "gmail_list_messages":
             r = _httpx.get(f"{base}/messages", headers=hdr,
                            params={"q": args.get("query", "is:unread"),
                                    "maxResults": max(1, min(500, int(args.get("max_results", 10))))},
                            timeout=20.0)
+            if r.status_code != 200:
+                return _fails(r)
+            mids = [m.get("id") for m in (r.json().get("messages") or []) if m.get("id")]
+            if not mids:
+                return f"No messages match query: {args.get('query', 'is:unread')}"
+
+            def _row(mid: str) -> dict:
+                rr = _httpx.get(f"{base}/messages/{mid}", headers=hdr,
+                                params={"format": "metadata"}, timeout=20.0)
+                if rr.status_code != 200:
+                    return {"id": mid, "error": str(rr.status_code)}
+                m = rr.json()
+                h = _gmail_headers(m)
+                return {
+                    "id": mid,
+                    "from": h.get("from", ""),
+                    "subject": h.get("subject", "(no subject)"),
+                    "date": h.get("date", ""),
+                    "snippet": (m.get("snippet") or "")[:160],
+                }
+
+            fetch = mids[:20]
+            with _cf.ThreadPoolExecutor(max_workers=8) as pool:
+                rows = [row for row in pool.map(_row, fetch) if "error" not in row]
+            lines = [
+                f"[{i}] {row['subject']}\n    From: {row['from']}\n    Date: {row['date']}\n"
+                f"    id={row['id']}\n    Snippet: {row['snippet']}"
+                for i, row in enumerate(rows, 1)
+            ]
+            if len(mids) > len(fetch):
+                lines.append(f"... {len(mids) - len(fetch)} more match(es): {', '.join(mids[len(fetch):])}")
+            return "\n\n".join(lines)[:8000]
         elif tool == "gmail_get_message":
             mid = str(args.get("message_id", ""))
             if not mid or "/" in mid or ".." in mid:
                 return "Error: valid message_id is required"
             r = _httpx.get(f"{base}/messages/{mid}", headers=hdr,
-                           params={"format": args.get("format", "metadata")}, timeout=20.0)
+                           params={"format": args.get("format", "full")}, timeout=20.0)
+            if r.status_code != 200:
+                return _fails(r)
+            m = r.json()
+            h = _gmail_headers(m)
+            body = _gmail_msg_text(m) or "(no text body)"
+            head = (
+                f"Subject: {h.get('subject', '(no subject)')}\n"
+                f"From: {h.get('from', '')}\n"
+                f"To: {h.get('to', '')}\n"
+                f"Date: {h.get('date', '')}\n"
+                f"id: {m.get('id')}"
+            )
+            return f"{head}\n\n{body}"[:8000]
         elif tool == "gmail_list_labels":
             r = _httpx.get(f"{base}/labels", headers=hdr, timeout=20.0)
+            if r.status_code != 200:
+                return _fails(r)
+            labels = r.json().get("labels") or []
+            return "\n".join(
+                f"- {l.get('name')}  (id={l.get('id')}, type={l.get('type')})" for l in labels
+            )[:8000]
         elif tool in ("gmail_send_message", "gmail_send_email", "send_email"):
             import base64 as _b64
             from email.mime.text import MIMEText as _MIMEText
@@ -1526,13 +1626,12 @@ def _exec_gmail(tool: str, args: dict, user_id: Optional[str] = None) -> str:
             msg["Subject"] = subject
             raw = _b64.urlsafe_b64encode(msg.as_bytes()).decode("ascii")
             r = _httpx.post(f"{base}/messages/send", headers=hdr, json={"raw": raw}, timeout=20.0)
+            if r.status_code != 200:
+                return _fails(r)
+            res = r.json()
+            return f"Email sent to {to}. id={res.get('id')}, thread_id={res.get('threadId')}"
         else:
             return f"Gmail tool '{tool}' needs approval — supported: list/get/labels/send."
-        if r.status_code == 401:
-            return "Gmail token expired. Reconnect via Connect Gmail."
-        if r.status_code != 200:
-            return f"Gmail API error ({r.status_code}): {r.text[:500]}"
-        return json.dumps(r.json(), indent=2, default=str)[:8000]
     except Exception as exc:
         return f"Gmail request failed: {exc}"
 
