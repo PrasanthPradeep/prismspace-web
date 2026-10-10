@@ -9,18 +9,27 @@ const SWARM_URL = process.env.HIVE_API_URL ?? 'http://localhost:7433';
 export async function GET(req: NextRequest) {
   const code = req.nextUrl.searchParams.get('code') ?? '';
   const state = req.nextUrl.searchParams.get('state') ?? '';
+  const home = new URL('/', req.url);
+  const fail = (message: string) => {
+    home.searchParams.set('gmail_error', message.slice(0, 200));
+    return NextResponse.redirect(home);
+  };
   try {
     const res = await fetch(
       `${SWARM_URL}/api/auth/google/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`,
       { cache: 'no-store' },
     );
-    const data = await res.json();
-    if (!res.ok) return NextResponse.json(data, { status: res.status });
-    const home = new URL('/', req.url);
-    home.searchParams.set('gmail_user_id', data.user_id ?? '');
-    home.searchParams.set('gmail_email', data.email ?? '');
+    let data: Record<string, unknown> = {};
+    try {
+      data = await res.json();
+    } catch {
+      data = { detail: `Unexpected response (${res.status})` };
+    }
+    if (!res.ok) return fail(String(data.detail ?? data.error ?? 'Gmail connection failed'));
+    home.searchParams.set('gmail_user_id', String(data.user_id ?? ''));
+    home.searchParams.set('gmail_email', String(data.email ?? ''));
     return NextResponse.redirect(home);
   } catch (err) {
-    return NextResponse.json({ error: 'Backend unavailable', detail: String(err) }, { status: 503 });
+    return fail(`Backend unavailable: ${String(err)}`);
   }
 }

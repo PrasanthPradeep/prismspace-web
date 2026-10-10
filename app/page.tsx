@@ -40,6 +40,29 @@ export default function Home() {
     return () => clearTimeout(timer);
   }, []);
 
+  // Handle Google OAuth result (redirected back from /api/auth/google/callback)
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const uid = q.get('gmail_user_id');
+    const email = q.get('gmail_email');
+    const error = q.get('gmail_error');
+    if (error) {
+      window.dispatchEvent(new CustomEvent('prism:island-event', {
+        detail: { title: 'Gmail connection failed', subtitle: decodeURIComponent(error), icon: '❌', duration: 5000 },
+      }));
+    } else if (uid) {
+      localStorage.setItem('prism_gmail_user_id', uid);
+      if (email) {
+        localStorage.setItem('prism_gmail_email', email);
+        window.dispatchEvent(new CustomEvent('prism:island-event', {
+          detail: { title: 'Gmail connected', subtitle: `Connected as ${decodeURIComponent(email)}`, icon: '✅', duration: 3500 },
+        }));
+      }
+    }
+    if (error || uid) window.history.replaceState({}, '', window.location.pathname);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Open Agent Swarm panel from SearchBar custom event
   useEffect(() => {
     const handler = () => openPanel('agent-swarm');
