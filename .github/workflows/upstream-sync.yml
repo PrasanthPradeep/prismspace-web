@@ -1,0 +1,94 @@
+name: Upstream Sync Check
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+      - edited
+
+permissions:
+  contents: read
+
+concurrency:
+  group: upstream-sync-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  upstream-sync:
+    name: Upstream Sync Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Validate pull request information
+        env:
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -z "$HEAD_REPO" || "$HEAD_REPO" == "null" ]]; then
+            echo "::error::The contributor repository is unavailable."
+            exit 1
+          fi
+
+          if [[ -z "$HEAD_SHA" || -z "$BASE_BRANCH" ]]; then
+            echo "::error::Missing pull request commit or target branch."
+            exit 1
+          fi
+
+      - name: Fetch latest target and contributor commits
+        env:
+          BASE_REPO: ${{ github.repository }}
+          BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git init repo
+          cd repo
+
+          git remote add upstream \
+            "https://github.com/${BASE_REPO}.git"
+
+          if ! git fetch --no-tags upstream \
+            "refs/heads/${BASE_BRANCH}"; then
+            echo "::error::Could not fetch the latest target branch."
+            exit 1
+          fi
+
+          BASE_SHA=$(git rev-parse FETCH_HEAD)
+
+          if ! git fetch --no-tags \
+            "https://github.com/${HEAD_REPO}.git" \
+            "$HEAD_SHA"; then
+            echo "::error::Could not fetch the contributor commit."
+            exit 1
+          fi
+
+          if ! git cat-file -e "${HEAD_SHA}^{commit}"; then
+            echo "::error::Contributor commit is unavailable."
+            exit 1
+          fi
+
+          echo "Latest target commit: $BASE_SHA"
+          echo "Contributor commit: $HEAD_SHA"
+
+          if git merge-base --is-ancestor \
+            "$BASE_SHA" "$HEAD_SHA"; then
+            echo "PASS: The contributor branch contains the latest target commit."
+          else
+            echo "::error::Your branch is behind the original repository."
+            echo "Please sync your branch with upstream/${BASE_BRANCH},"
+            echo "resolve any conflicts, and push the updated branch."
+            exit 1
+          fi
