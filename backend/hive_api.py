@@ -1926,7 +1926,7 @@ async def _tool_use_loop(
     initial_response: str,
     request: "CreateAgentRequest",
     max_iterations: int = 10,
-    max_correction_attempts: int = 3,
+    max_correction_attempts: int = 1,
 ) -> str:
     """
     Implements a strict ReAct loop (Reason → Act → STOP → Observe) with 
@@ -2191,13 +2191,13 @@ async def _run_hive_agent(agent_id: str, request: CreateAgentRequest) -> None:
 
     try:
         _log(agent_id, f"Initialising Hive runtime ({request.provider}/{request.model})")
-        await asyncio.sleep(0.3)
+        await asyncio.sleep(0.05)
 
         # --- Planning phase ---
         agent["status"] = "planning"
         agent["updated_at"] = datetime.utcnow().isoformat()
         _log(agent_id, f"Compiling execution DAG for: <<{request.objective}>>")
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(0.05)
 
         _log(agent_id, f"Spawning {request.max_agents} specialised sub-agents")
         sub_agents = [f"Agent-{chr(65+i)}" for i in range(request.max_agents)]
@@ -2205,7 +2205,7 @@ async def _run_hive_agent(agent_id: str, request: CreateAgentRequest) -> None:
         for i, sa in enumerate(sub_agents):
             assignment = request.worker_models[i] if i < len(request.worker_models) else {"provider": request.provider, "model": request.model}
             _log(agent_id, f"   -> {sa} ready ({assignment.get('provider', request.provider)}/{assignment.get('model', request.model)})")
-            await asyncio.sleep(0.15)
+            await asyncio.sleep(0.02)
 
         # --- Running phase ---
         agent["status"] = "running"
@@ -2261,7 +2261,7 @@ async def _run_hive_agent(agent_id: str, request: CreateAgentRequest) -> None:
         result_text = await _tool_use_loop(agent_id, result_text, request)
 
         _log(agent_id, "Running validation checks...")
-        await asyncio.sleep(0.3)
+        await asyncio.sleep(0.05)
 
         # --- Complete ---
         agent["status"] = "completed"
