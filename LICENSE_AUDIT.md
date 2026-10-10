@@ -17,7 +17,7 @@ The recommended project license is Apache-2.0 for PrismSpace-authored source cod
 
 * License: Apache License 2.0
 * SPDX identifier: `Apache-2.0`
-* Copyright owner: Nobin Sijo (GitHub: `NobinSijo7T`)
+* Copyright owner: Prism AI Labs
 * Reason: permissive commercial use and redistribution, modification permission, and an express patent grant; no copyleft dependency was found in the resolved npm tree.
 * Confidence: Medium. This owner statement is supplied by the project maintainer; confirm that all contributors and employers have assigned or authorized the relevant rights.
 
@@ -100,7 +100,7 @@ The supplied `checking-license-compliance` skill could not execute because `scri
 
 ## Source-Code Provenance
 
-All 217 tracked PrismSpace-authored source/configuration files in the audited code directories now carry `Copyright 2026 Nobin Sijo (NobinSijo7T)` and `SPDX-License-Identifier: Apache-2.0` headers. Deliberately excluded are third-party SQLime code, dependency/vendor trees, binary assets, datasets, generated PDFs, and other materials whose ownership or license is separate or unknown.
+All 217 tracked PrismSpace-authored source/configuration files in the audited code directories now carry `Copyright 2026 Prism AI Labs` and `SPDX-License-Identifier: Apache-2.0` headers. Deliberately excluded are third-party SQLime code, dependency/vendor trees, binary assets, datasets, generated PDFs, and other materials whose ownership or license is separate or unknown.
 
 Repository comments and documentation mention AI-assisted work, shadcn-style components, external package ecosystems, and many linked upstream projects, but do not establish authorship or license for copied snippets. No reliable line-by-line provenance record exists. All copied snippets and generated code without source headers are `PROVENANCE UNKNOWN` until reviewed by the copyright owner.
 
@@ -144,7 +144,7 @@ The application calls external AI APIs and may send user prompts or tool data. P
 
 ## Copyright Ownership Issues
 
-The project maintainer identifies the PrismSpace-authored source owner as Nobin Sijo (`NobinSijo7T`). No contributor agreement, employer assignment, or asset purchase record is established in the repository. Before public release, the owner must confirm that they control the rights to PrismSpace-authored code and every bundled non-code asset.
+The project maintainer identifies the PrismSpace-authored source owner as Prism AI Labs. No contributor agreement, employer assignment, or asset purchase record is established in the repository. Before public release, the owner must confirm that they control the rights to PrismSpace-authored code and every bundled non-code asset.
 
 ## Blocking Issues
 

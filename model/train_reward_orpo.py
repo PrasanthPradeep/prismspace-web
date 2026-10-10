@@ -1,4 +1,4 @@
-# Copyright 2026 Nobin Sijo (NobinSijo7T).
+# Copyright 2026 Prism AI Labs.
 # SPDX-License-Identifier: Apache-2.0
 """Fine-tune a local causal language model on curated preference pairs with ORPO.
 
@@ -40,6 +40,8 @@ def main() -> None:
     parser.add_argument("--train-file", default="model/datasets/training/curated/reward/train.jsonl")
     parser.add_argument("--eval-file", default="model/datasets/testing/curated/reward/test.jsonl")
     parser.add_argument("--output-dir", default="model/artifacts/reward_orpo")
+    parser.add_argument("--merge-output", default="",
+                        help="Optional standalone model directory after merging the ORPO adapter")
     parser.add_argument("--cache-dir", default="model/artifacts/huggingface_cache")
     parser.add_argument("--max-length", type=int, default=256,
                         help="Max token length per sample. Lower = faster. Default 256.")
@@ -97,11 +99,9 @@ def main() -> None:
     tokenizer = AutoTokenizer.from_pretrained(model_path, local_files_only=True)
     tokenizer.pad_token = tokenizer.pad_token or tokenizer.eos_token
 
-    # Load in native bf16 — no quantization.
-    # 4-bit quant + ORPO causes NaN in log-softmax due to precision mismatch.
-    # Qwen2.5-1.5B in bf16 = ~3 GB VRAM, fits RTX 3050 with batch_size=1.
+    # fp16 avoids the NaN-prone bf16 ORPO path on some consumer GPUs.
     model = AutoModelForCausalLM.from_pretrained(
-        model_path, local_files_only=True, torch_dtype=torch.bfloat16, device_map="auto"
+        model_path, local_files_only=True, torch_dtype=torch.float16, device_map="auto"
     )
     model.config.use_cache = False
 
@@ -122,7 +122,9 @@ def main() -> None:
         per_device_eval_batch_size=args.batch_size,
         gradient_accumulation_steps=args.grad_accum,
         gradient_checkpointing=True,
-        bf16=True,
+        fp16=True,
+        bf16=False,
+        max_grad_norm=1.0,
         dataloader_num_workers=args.dataloader_workers,
         dataloader_pin_memory=False,  # pin_memory uses extra VRAM — off for 4 GB cards
         logging_steps=10,
@@ -147,8 +149,18 @@ def main() -> None:
     evaluation = {key: float(value) for key, value in trainer.evaluate().items() if isinstance(value, (int, float))}
     trainer.save_model(str(output_dir))
     tokenizer.save_pretrained(output_dir)
+    if args.merge_output:
+        from peft import PeftModel
+
+        merge_base = AutoModelForCausalLM.from_pretrained(
+            model_path, local_files_only=True, torch_dtype=torch.float16
+        )
+        merged = PeftModel.from_pretrained(merge_base, str(output_dir)).merge_and_unload()
+        merged.save_pretrained(args.merge_output, safe_serialization=True)
+        tokenizer.save_pretrained(args.merge_output)
     (output_dir / "evaluation_report.json").write_text(
-        json.dumps({**manifest, "evaluation": evaluation}, indent=2), encoding="utf-8"
+        json.dumps({**manifest, "evaluation": evaluation, "merge_output": args.merge_output}, indent=2),
+        encoding="utf-8",
     )
     print(json.dumps(evaluation, indent=2))
 

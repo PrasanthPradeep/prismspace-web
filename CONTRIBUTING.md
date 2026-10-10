@@ -1,6 +1,6 @@
 # Contributing to PrismSpace
 
-Copyright © 2026 Nobin Sijo ([NobinSijo7T](https://github.com/NobinSijo7T)).
+Copyright © 2026 Prism AI Labs.
 
 PrismSpace source is licensed under Apache-2.0. This document describes the
 project's contribution and repository-access policy; it does not modify or
@@ -56,5 +56,5 @@ does not grant permission to redistribute third-party models or datasets.
    submit it under Apache-2.0, unless a separate written agreement says
    otherwise.
 
-Nobin Sijo is the final maintainer for contribution scope, core AI access,
+Prism AI Labs is the final maintainer for contribution scope, core AI access,
 licensing exceptions, and release approval.

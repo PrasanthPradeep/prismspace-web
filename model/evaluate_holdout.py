@@ -1,4 +1,4 @@
-# Copyright 2026 Nobin Sijo (NobinSijo7T).
+# Copyright 2026 Prism AI Labs.
 # SPDX-License-Identifier: Apache-2.0
 """Run exported PrismSpace routing models against a held-out dataset folder."""
 from __future__ import annotations

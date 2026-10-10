@@ -5,6 +5,9 @@ torchaudio
 transformers
 accelerate
 datasets
+peft
+trl
+huggingface_hub
 sentence-transformers
 scikit-learn
 xgboost

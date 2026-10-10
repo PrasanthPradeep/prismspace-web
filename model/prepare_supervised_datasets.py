@@ -1,4 +1,4 @@
-# Copyright 2026 Nobin Sijo (NobinSijo7T).
+# Copyright 2026 Prism AI Labs.
 # SPDX-License-Identifier: Apache-2.0
 """Prepare target-specific supervised datasets from the curated source folders.
 
@@ -128,6 +128,78 @@ def _prepare_reward(root: Path, output: Path) -> dict[str, Any]:
     return counts
 
 
+def _prepare_envfactory_sft(root: Path, output: Path) -> dict[str, Any]:
+    """Convert EnvFactory verified trajectories into chat-style SFT rows."""
+    source = root / "EnvFactory-RL" / "env_factory_rl.json"
+    rows_by_split: dict[str, list[dict[str, Any]]] = {"train": [], "test": []}
+    if not source.exists():
+        return {split: 0 for split in rows_by_split}
+    records = json.loads(source.read_text(encoding="utf-8"))
+    for index, record in enumerate(records):
+        try:
+            prompt = json.loads(record["prompt"])
+            ground_truth = json.loads(record["reward_model"]["ground_truth"])
+        except (KeyError, TypeError, json.JSONDecodeError):
+            continue
+        if not isinstance(prompt, list) or not isinstance(ground_truth, list):
+            continue
+        messages = [item for item in prompt if isinstance(item, dict) and item.get("role") == "user"]
+        if not messages:
+            continue
+        messages.append({
+            "role": "assistant",
+            "content": json.dumps(ground_truth, ensure_ascii=False),
+        })
+        task_key = str(record.get("extra_info", {}).get("index", index))
+        rows_by_split[_split_group(task_key)].append({"messages": messages})
+    return {
+        split: _write_jsonl(output / "sft_envfactory" / f"{split}.jsonl", rows)
+        for split, rows in rows_by_split.items()
+    }
+
+
+def _prepare_oasst_pairs(root: Path, output: Path) -> dict[str, Any]:
+    """Convert ranked OASST1 replies into prompt/chosen/rejected preference pairs."""
+    source = root / "oasst1" / "data"
+    rows_by_split: dict[str, list[dict[str, Any]]] = {"train": [], "test": []}
+    files = sorted(source.glob("*.parquet"))
+    if not files:
+        return {split: 0 for split in rows_by_split}
+    frame = pd.concat((pd.read_parquet(path) for path in files), ignore_index=True)
+    assistants = frame[
+        (frame["role"] == "assistant")
+        & frame["rank"].notna()
+        & ~frame["deleted"].fillna(False)
+    ]
+    for tree_id, group in assistants.groupby("message_tree_id", sort=True):
+        replies = group.sort_values(["parent_id", "rank"])
+        for parent_id, siblings in replies.groupby("parent_id", sort=True):
+            if not isinstance(parent_id, str) or len(siblings) < 2:
+                continue
+            parent = frame[frame["message_id"] == parent_id]
+            if parent.empty:
+                continue
+            chosen = siblings.iloc[0]
+            rejected = siblings.iloc[-1]
+            if not str(chosen["text"]).strip() or not str(rejected["text"]).strip():
+                continue
+            row = {
+                "prompt": str(parent.iloc[0]["text"]),
+                "chosen": str(chosen["text"]),
+                "rejected": str(rejected["text"]),
+            }
+            rows_by_split[_split_group(str(tree_id))].append(row)
+    counts: dict[str, int] = {}
+    for split, rows in rows_by_split.items():
+        _write_jsonl(output / "reward" / f"oasst1_{split}.jsonl", rows)
+        merged_path = output / "reward" / f"{split}.jsonl"
+        with merged_path.open("a", encoding="utf-8") as handle:
+            for row in rows:
+                handle.write(json.dumps(row, ensure_ascii=False) + "\n")
+        counts[split] = len(rows)
+    return counts
+
+
 def _prepare_provider(root: Path, output: Path, max_per_provider: int = 350) -> dict[str, Any]:
     rows_by_split: dict[str, list[dict[str, Any]]] = {"train": [], "test": []}
     seen_prompts: set[str] = set()
@@ -251,6 +323,8 @@ def main() -> None:
         "approval": _prepare_approval(root, output),
         "success": _prepare_success(root, output),
         "reward": _prepare_reward(root, output),
+        "sft_envfactory": _prepare_envfactory_sft(root, output),
+        "oasst1": _prepare_oasst_pairs(root, output),
         "provider": _prepare_provider(root, output),
     }
     write_json(output / "preparation_report.json", report)

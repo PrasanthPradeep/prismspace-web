@@ -514,7 +514,7 @@ prismspace-web/
 
 ## 📝 License
 
-Copyright © 2026 Nobin Sijo ([NobinSijo7T](https://github.com/NobinSijo7T)). The original PrismSpace source code is licensed under the **Apache License 2.0**. See [LICENSE](LICENSE).
+Copyright © 2026 Prism AI Labs. The original PrismSpace source code is licensed under the **Apache License 2.0**. See [LICENSE](LICENSE).
 
 The repository also contains or references third-party packages, fonts, images, datasets, model artifacts, and hosted AI services with separate terms. Those materials are not relicensed by this notice; see [NOTICE](NOTICE) and [LICENSE_AUDIT.md](LICENSE_AUDIT.md) before redistributing a source archive, container, or trained model.
 
@@ -531,7 +531,7 @@ Collaborators have broad project-level access to propose and contribute to exist
 
 Contributors may add tools, improve UX, fix bugs, add tests, and improve documentation through normal review. Contributions must preserve third-party notices and disclose copied, generated, AI-assisted, or externally sourced material.
 
-The following areas are maintainer-controlled and require prior written authorization from Nobin Sijo before contribution, modification, retraining, replacement, or redistribution:
+The following areas are maintainer-controlled and require prior written authorization from Prism AI Labs before contribution, modification, retraining, replacement, or redistribution:
 
 - core AI/model architecture and training code under `model/`;
 - model weights, checkpoints, indexes, and serialized artifacts under `model/artifacts*/`;
