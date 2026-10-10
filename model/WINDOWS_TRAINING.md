@@ -58,12 +58,12 @@ Expect a report ending roughly like:
 
 | set | train | test | source |
 | --- | --- | --- | --- |
-| `reward` | 76,101 | 5,908 | Ultrafeedback + OASST1 preference pairs |
-| `sft_envfactory` | 2,503 | 589 | EnvFactory tool trajectories |
+| `reward` | ~61,135 | ~2,000 | ultrafeedback prefs |
+| `reward_oasst1` | +~18,950 merged in | — | oasst1 ranked siblings |
+| `sft_envfactory` | ~2,458 | ~634 | EnvFactory tool trajectories |
 
-`reward/train.jsonl` + `test.jsonl` hold `{prompt, chosen, rejected}` from
-both Ultrafeedback and OASST1; `sft_envfactory/*.jsonl` holds
-`{messages: [user, assistant tool-calls]}` from EnvFactory-RL.
+`reward/train.jsonl` + `test.jsonl` hold `{prompt, chosen, rejected}`;
+`sft_envfactory/*.jsonl` hold `{messages: [user, assistant tool-calls]}`.
 
 ## 4. Validate without training (CPU-safe, 1 min)
 
@@ -72,10 +72,8 @@ python model\train_sft_envfactory.py --model-path model\datasets\Qwen2.5-1.5B --
 python model\train_reward_orpo.py --model-path model\datasets\Qwen2.5-1.5B --train-file model\datasets\curated\reward\train.jsonl --eval-file model\datasets\curated\reward\test.jsonl --dry-run
 ```
 
-The SFT manifest should report 2,503 train rows and 589 eval rows. The ORPO
-manifest should report 76,101 train pairs and 500 eval pairs by default
-(the script caps evaluation during training unless `--max-eval-samples` is
-changed). If a manifest errors, stop — the data paths are wrong.
+Both print a manifest (`train_pairs`/`train_rows`, no errors). If a
+manifest errors, stop — the data paths are wrong.
 
 ## 5. Stage 1 — SFT on EnvFactory-RL (~20 min)
 
@@ -90,44 +88,28 @@ python model\train_sft_envfactory.py --model-path model\datasets\Qwen2.5-1.5B --
 * Sanity number: eval loss should fall below the starting value; final
   `evaluation_report.json` lands next to the adapter.
 
-## 6. Stage 2 — Preference SFT on ultrafeedback + oasst1 (~3–5 hrs)
+## 6. Stage 2 — ORPO on ultrafeedback + oasst1 (~3–5 hrs)
 
-The preferred responses from both datasets are trained sequentially after
-Stage 1. This is the stable consumer-GPU path; native ORPO was removed from
-the recommended Windows path because its fp16/bf16 log-odds backward pass
-produced NaN gradients or CUDA failures on the tested RTX 4060.
+Flags are pre-tuned for 8 GB VRAM (batch 2 × accum 4, len 512, LoRA r16).
 
 ```powershell
-python model\train_preference_sft.py --model-path model\datasets\Qwen2.5-1.5B-sft --train-file model\datasets\curated\reward\train.jsonl --eval-file model\datasets\curated\reward\test.jsonl --replay-file model\datasets\curated\sft_envfactory\train.jsonl --replay-eval-file model\datasets\curated\sft_envfactory\test.jsonl --replay-ratio 0.25 --output-dir model\artifacts\preference_sft_replay --merge-output model\artifacts\prismspace-qwen-sft-preference-replay --batch-size 1 --grad-accum 8 --max-length 256 --lora-rank 8 --epochs 1 --max-eval-samples 500
+python model\train_reward_orpo.py --model-path model\datasets\Qwen2.5-1.5B-sft --train-file model\datasets\curated\reward\train.jsonl --eval-file model\datasets\curated\reward\test.jsonl --output-dir model\artifacts\reward_orpo --batch-size 2 --grad-accum 4 --max-length 512 --lora-rank 16 --epochs 2
 ```
 
-This uses all 76,101 merged preference rows by default. Use the bounded
-smoke test below before starting the full run.
-
-## 7. Stage 3 — Verify the standalone model
+Optional smoke test first (~5 min, proves CUDA + ORPO end-to-end):
 
 ```powershell
-Get-Content model\artifacts\preference_sft\evaluation_report.json
-Get-ChildItem model\artifacts\prismspace-qwen-sft-preference
+python model\train_reward_orpo.py --model-path model\datasets\Qwen2.5-1.5B-sft --train-file model\datasets\curated\reward\train.jsonl --eval-file model\datasets\curated\reward\test.jsonl --output-dir model\artifacts\reward_orpo_smoke --max-train-samples 200 --max-eval-samples 50 --epochs 1
 ```
 
-The standalone model contains the original Qwen weights plus EnvFactory SFT
-updates plus preferred-response updates from Ultrafeedback and OASST1.
+## 7. Check the results
 
-Optional smoke test first:
-
-```powershell
-python model\train_preference_sft.py --model-path model\datasets\Qwen2.5-1.5B-sft --train-file model\datasets\curated\reward\train.jsonl --eval-file model\datasets\curated\reward\test.jsonl --output-dir model\artifacts\preference_sft_smoke --merge-output model\artifacts\prismspace-qwen-sft-preference-smoke --max-train-samples 200 --epochs 1 --batch-size 1 --grad-accum 4 --max-length 256 --lora-rank 4
-```
-
-## 8. Check the results
-
-* `model\artifacts\preference_sft\evaluation_report.json` — all metrics
-  must be finite and `eval_loss` should be reported.
+* `model\artifacts\reward_orpo\evaluation_report.json` — want eval loss
+  down and `eval_rewards/chosen` above `eval_rewards/rejected`.
 * Quick human check — load the adapter and ask it a tool question; expect
   a valid `{"tool", "arguments"}` call, not prose.
 
-## 9. Bring it back to the project
+## 8. Bring it back to the project
 
 Copy **only** these (small) folders to the Linux VM; everything else
 (checkpoints, `.cache`) stays on Windows:
