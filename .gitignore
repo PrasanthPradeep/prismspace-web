@@ -7,6 +7,7 @@
 .yarn/install-state.gz
 .venv/
 backend/.venv/
+monitoring/.env
 
 # testing
 /coverage

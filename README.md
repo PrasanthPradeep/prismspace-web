@@ -25,6 +25,7 @@ An AI-powered developer operating environment, browser dashboard, and multi-agen
 - [Quick Start: Run, Train & Test](#-quick-start-run-train--test)
   - [Prerequisites](#prerequisites)
   - [1. Frontend & Backend Quick Start (Unified Runners)](#1-frontend--backend-quick-start-unified-runners)
+  - [Analytics & Observability](#analytics--observability)
   - [2. Machine Learning Environment Setup](#2-machine-learning-environment-setup)
   - [3. Training Commands](#3-training-commands)
   - [4. Model Testing & Inference Commands](#4-model-testing--inference-commands)
@@ -236,6 +237,61 @@ chmod +x run/*.sh
 
 *(See [`run/README.md`](run/README.md) for full CLI flags, advanced options, and technical details.)*
 
+### Analytics & Observability
+
+PrismSpace uses two complementary hosted services:
+
+| Service | Purpose |
+|---|---|
+| **PostHog** | Pageviews, active users, feature usage, agent creation, approvals, cancellations, and intelligence-request trends |
+| **Grafana Cloud + Prometheus** | API uptime, request rate, latency, errors, and model-service usage |
+
+PostHog is initialized in the Next.js App Router with explicit events only.
+Autocapture and session recording are disabled. Prompt contents, responses, API
+keys, and other sensitive payloads are not sent to PostHog. See [`POSTHOG.md`](POSTHOG.md)
+for the event taxonomy.
+
+The repository includes a gitignored `.env.local` template. Replace its
+placeholders with real values before starting the frontend:
+
+```env
+# PostHog
+NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN=phc_your_project_token
+NEXT_PUBLIC_POSTHOG_HOST=https://us.i.posthog.com
+POSTHOG_PROJECT_TOKEN=phc_your_project_token
+POSTHOG_HOST=https://us.i.posthog.com
+
+# Grafana Cloud Hosted Prometheus
+GRAFANA_CLOUD_PROMETHEUS_URL=https://prometheus-your-stack.grafana.net/api/prom/push
+GRAFANA_CLOUD_PROMETHEUS_USER=your_stack_user_id
+GRAFANA_CLOUD_API_KEY=your_metrics_write_token
+
+# Hosted metrics endpoints
+RENDER_METRICS_HOST=your-service.onrender.com:443
+RENDER_METRICS_TOKEN=the_api_METRICS_TOKEN
+RAILWAY_METRICS_HOST=your-service.up.railway.app:443
+RAILWAY_METRICS_TOKEN=the_api_METRICS_TOKEN
+CLOUDFLARE_METRICS_HOST=your-random-subdomain.trycloudflare.com:443
+CLOUDFLARE_METRICS_TOKEN=the_api_METRICS_TOKEN
+```
+
+The browser only receives variables prefixed with `NEXT_PUBLIC_`. Keep Grafana
+credentials and API metrics tokens server-side. The FastAPI services expose a
+token-protected `/metrics` endpoint; set `METRICS_TOKEN` on each hosted API and
+copy the same value to its matching collector variable.
+
+To run the Grafana Alloy collector locally:
+
+```powershell
+docker compose --env-file .env.local -f monitoring\docker-compose.yml up -d --build
+```
+
+For laptop-independent collection, deploy `monitoring/Dockerfile` as an
+always-on service and give it the same Grafana Cloud and endpoint variables.
+Render and Railway URLs are stable targets. Cloudflare Quick Tunnel URLs are
+temporary and must be updated after the tunnel restarts. See
+[`monitoring/README.md`](monitoring/README.md) for deployment details.
+
 ---
 
 ## 🖥️ Agent OS Tooling
@@ -443,6 +499,9 @@ prismspace-web/
 - **[FEATURES.md](FEATURES.md)** — Detailed specification of all 50+ built-in features.
 - **[MIGRATION_GUIDE.md](MIGRATION_GUIDE.md)** — Architectural design and customization manual.
 - **[DEPLOYMENT.md](DEPLOYMENT.md)** — Deployment guides for Vercel, Netlify, Railway, and AWS.
+- **[POSTHOG.md](POSTHOG.md)** — PostHog configuration, privacy boundaries, and event taxonomy.
+- **[monitoring/README.md](monitoring/README.md)** — Grafana Cloud, Alloy, Render, Railway, and Cloudflare metrics setup.
+- **[DEVOPS.md](DEVOPS.md)** — GitHub Actions CI, security scanning, deployment gates, and production protections.
 
 ### Foundational Research Papers
 - **ORPO**: [Hong et al., 2024 - *ORPO: Monolithic Preference Optimization without Reference Model* (arXiv:2403.07691)](https://arxiv.org/abs/2403.07691)

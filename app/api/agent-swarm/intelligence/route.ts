@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { captureServerPrismEvent } from '@/lib/posthog-server';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,6 +19,10 @@ export async function GET(req: NextRequest) {
       signal: AbortSignal.timeout(5000),
     });
     const data = await res.json();
+    await captureServerPrismEvent(req, 'intelligence_requested', {
+      status: res.ok ? 'success' : 'error',
+      text_length: text.length,
+    });
     return NextResponse.json(data, { status: res.status });
   } catch (err) {
     return NextResponse.json({ error: 'Agent Swarm backend unavailable', detail: String(err) }, { status: 503 });

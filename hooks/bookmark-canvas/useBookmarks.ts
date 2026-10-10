@@ -18,6 +18,57 @@ import { getFaviconUrl, isValidUrl, exportBookmarks, downloadFile } from '@/lib/
 import toast from 'react-hot-toast';
 
 const DEFAULT_COLOR = STICKY_COLORS[0].value;
+const MAX_IMPORT_FILE_BYTES = 2 * 1024 * 1024;
+const MAX_IMPORTED_BOOKMARKS = 1000;
+const MAX_TITLE_LENGTH = 200;
+const MAX_URL_LENGTH = 2048;
+const MAX_NOTES_LENGTH = 5000;
+const MAX_CATEGORY_LENGTH = 50;
+
+function boundedString(value: unknown, maxLength: number): string {
+  return typeof value === 'string' ? value.trim().slice(0, maxLength) : '';
+}
+
+function safeDate(value: unknown, fallback: Date): Date {
+  const date = new Date(typeof value === 'number' || typeof value === 'string' ? value : '');
+  return Number.isNaN(date.getTime()) ? fallback : date;
+}
+
+function sanitizeImportedBookmark(value: unknown, now: Date): Omit<Bookmark, 'id'> | null {
+  if (!value || typeof value !== 'object') return null;
+
+  const source = value as Record<string, unknown>;
+  const rawUrl = boundedString(source.url, MAX_URL_LENGTH);
+  const url = rawUrl ? (rawUrl.startsWith('http') ? rawUrl : `https://${rawUrl}`) : '';
+  if (!isValidUrl(url)) return null;
+
+  const title = boundedString(source.title, MAX_TITLE_LENGTH) || new URL(url).hostname;
+  const color = boundedString(source.color, 20);
+  const safeColor = /^#[0-9a-f]{6}$/i.test(color) ? color : DEFAULT_COLOR;
+  const numberOr = (candidate: unknown, fallback: number, min: number, max: number) => {
+    const number = typeof candidate === 'number' && Number.isFinite(candidate) ? candidate : fallback;
+    return Math.max(min, Math.min(max, number));
+  };
+
+  return {
+    title,
+    url,
+    favicon: getFaviconUrl(url),
+    notes: boundedString(source.notes, MAX_NOTES_LENGTH),
+    color: safeColor,
+    favorite: source.favorite === true,
+    pinned: source.pinned === true,
+    category: boundedString(source.category, MAX_CATEGORY_LENGTH),
+    x: numberOr(source.x, 100, -1_000_000, 1_000_000),
+    y: numberOr(source.y, 100, -1_000_000, 1_000_000),
+    width: numberOr(source.width, DEFAULT_CARD_WIDTH, 200, 600),
+    height: numberOr(source.height, DEFAULT_CARD_HEIGHT, 150, 800),
+    createdAt: safeDate(source.createdAt, now),
+    updatedAt: now,
+    lastVisited: source.lastVisited ? safeDate(source.lastVisited, now) : undefined,
+    visitCount: Math.floor(numberOr(source.visitCount, 0, 0, 1_000_000)),
+  };
+}
 
 export function useBookmarks() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -100,7 +151,18 @@ export function useBookmarks() {
   // Update bookmark fields
   const updateBookmark = useCallback(
     async (id: number, changes: Partial<Bookmark>): Promise<void> => {
-      await db.bookmarks.update(id, { ...changes, updatedAt: new Date() });
+      const safeChanges = { ...changes };
+      if (typeof changes.url === 'string') {
+        const url = changes.url.startsWith('http') ? changes.url : `https://${changes.url}`;
+        if (!isValidUrl(url)) {
+          toast.error('Please enter a valid URL');
+          return;
+        }
+        safeChanges.url = url;
+        safeChanges.favicon = getFaviconUrl(url);
+      }
+      delete safeChanges.id;
+      await db.bookmarks.update(id, { ...safeChanges, updatedAt: new Date() });
     },
     []
   );
@@ -211,39 +273,50 @@ export function useBookmarks() {
 
   // Import bookmarks from JSON
   const importFromJson = useCallback(async (file: File): Promise<void> => {
+    if (file.size > MAX_IMPORT_FILE_BYTES) {
+      toast.error('Import file is too large (maximum 2 MB)');
+      return Promise.reject(new Error('Import file too large'));
+    }
+
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
+      reader.onerror = () => {
+        toast.error('Failed to read import file');
+        reject(new Error('Failed to read import file'));
+      };
       reader.onload = async (e) => {
         try {
           const text = e.target?.result as string;
           const data = JSON.parse(text);
-          const bookmarks: Bookmark[] = data.bookmarks ?? data;
+          const bookmarks: unknown = data && typeof data === 'object' && !Array.isArray(data)
+            ? (data as Record<string, unknown>).bookmarks
+            : data;
 
           if (!Array.isArray(bookmarks)) throw new Error('Invalid format');
+          if (bookmarks.length > MAX_IMPORTED_BOOKMARKS) {
+            throw new Error('Too many bookmarks');
+          }
 
           const now = new Date();
           let added = 0;
           let skipped = 0;
 
-          for (const bm of bookmarks) {
-            const exists = await db.bookmarks.where('url').equals(bm.url).first();
-            if (exists) { skipped++; continue; }
-            await db.bookmarks.add({
-              ...bm,
-              id: undefined,
-              createdAt: bm.createdAt ? new Date(bm.createdAt) : now,
-              updatedAt: now,
-              lastVisited: bm.lastVisited ? new Date(bm.lastVisited) : undefined,
-              visitCount: bm.visitCount || 0,
-            });
-            added++;
-          }
+          await db.transaction('rw', db.bookmarks, async () => {
+            for (const value of bookmarks) {
+              const bm = sanitizeImportedBookmark(value, now);
+              if (!bm) { skipped++; continue; }
+              const exists = await db.bookmarks.where('url').equals(bm.url).first();
+              if (exists) { skipped++; continue; }
+              await db.bookmarks.add(bm);
+              added++;
+            }
+          });
 
-          toast.success(`Imported ${added} bookmarks${skipped ? ` (${skipped} duplicates skipped)` : ''}`);
+          toast.success(`Imported ${added} bookmarks${skipped ? ` (${skipped} skipped)` : ''}`);
           resolve();
         } catch {
-          toast.error('Failed to import: invalid JSON format');
-          reject(new Error('Invalid JSON'));
+          toast.error('Failed to import: invalid or unsafe bookmark file');
+          reject(new Error('Invalid bookmark import'));
         }
       };
       reader.readAsText(file);

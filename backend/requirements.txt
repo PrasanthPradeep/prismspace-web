@@ -10,3 +10,4 @@ openai>=1.40.0         # OpenAI API client (also used for Anthropic-compatible c
 google-genai>=1.0.0    # Google Gemini API client
 anthropic>=0.40.0      # Anthropic API client
 cryptography>=41.0.0   # FERNET_KEY encryption for per-user Gmail tokens
+prometheus-fastapi-instrumentator>=7.1,<8

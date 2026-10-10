@@ -37,6 +37,12 @@
       "skillPath": "plugin/skills/agentmemory-rest-api/SKILL.md",
       "computedHash": "9ead004d38f9874c9ef24a61bd867ebec35656642e39f405b3badd0bdc53f3a9"
     },
+    "audit": {
+      "source": "NotHarshhaa/devops-skills",
+      "sourceType": "github",
+      "skillPath": "audit/SKILL.md",
+      "computedHash": "56458472e938691d2ffd3d0b6a3b7be40de8c68bdb3c5111e1b22dae745dcf04"
+    },
     "brag": {
       "source": "latent-spaces/brag",
       "sourceType": "github",
@@ -61,17 +67,59 @@
       "skillPath": "plugin/skills/commit-history/SKILL.md",
       "computedHash": "cf337496577dc9d7229b9f5d371c2dc0a837e4cc94ae39073eac1ab361fd0acf"
     },
+    "cost": {
+      "source": "NotHarshhaa/devops-skills",
+      "sourceType": "github",
+      "skillPath": "cost/SKILL.md",
+      "computedHash": "12cad3b0b7a983d2774fe87e7425d9498a3904161e56c6b7ec7a893c74c7a9d1"
+    },
+    "db-review": {
+      "source": "NotHarshhaa/devops-skills",
+      "sourceType": "github",
+      "skillPath": "db-review/SKILL.md",
+      "computedHash": "7538e29df9d198cfd185334ea787499c325b1aed08df09efa8ff5960d69df9c4"
+    },
+    "docker-review": {
+      "source": "NotHarshhaa/devops-skills",
+      "sourceType": "github",
+      "skillPath": "docker-review/SKILL.md",
+      "computedHash": "ec6051413863a6f118e91735173b4e6e5c71ef247656de95afaa831ecb9b06ac"
+    },
+    "dr-review": {
+      "source": "NotHarshhaa/devops-skills",
+      "sourceType": "github",
+      "skillPath": "dr-review/SKILL.md",
+      "computedHash": "0e1ad59d5ad9624c746fbd5ed31b9c19f7451387b3f2285b0b4c83328b0eaee1"
+    },
     "forget": {
       "source": "rohitg00/agentmemory",
       "sourceType": "github",
       "skillPath": "plugin/skills/forget/SKILL.md",
       "computedHash": "16c27fda6f9b25250c25196558d7d3001c587cbbce704caaa5572511aeb3edcd"
     },
+    "gitops-review": {
+      "source": "NotHarshhaa/devops-skills",
+      "sourceType": "github",
+      "skillPath": "gitops-review/SKILL.md",
+      "computedHash": "9ae278605d30c71a890e4b307244920b86939bc1b94db3a040cae6b11b367e6e"
+    },
     "handoff": {
       "source": "rohitg00/agentmemory",
       "sourceType": "github",
       "skillPath": "plugin/skills/handoff/SKILL.md",
       "computedHash": "f915ba05033ded7c905f6edfaf4e946e2f430deb642a83c51453c51a37f27e11"
+    },
+    "incident": {
+      "source": "NotHarshhaa/devops-skills",
+      "sourceType": "github",
+      "skillPath": "incident/SKILL.md",
+      "computedHash": "fd12d679f75a4fe4ddc82c8c4c113b9e2c3fbd6c5136cf1fc2a4b74e247b5e02"
+    },
+    "k8s-review": {
+      "source": "NotHarshhaa/devops-skills",
+      "sourceType": "github",
+      "skillPath": "k8s-review/SKILL.md",
+      "computedHash": "20c6169826d7051f944795eb5f4de67e6fcbbb875c294f1cec14f4ec8cf818e9"
     },
     "lesson": {
       "source": "rohitg00/agentmemory",
@@ -91,6 +139,18 @@
       "skillPath": "plugin/skills/memory-discipline/SKILL.md",
       "computedHash": "0c36702fb03bffacd03727361e053fea893f4e84f397759a35890f53ebc21846"
     },
+    "observability": {
+      "source": "NotHarshhaa/devops-skills",
+      "sourceType": "github",
+      "skillPath": "observability/SKILL.md",
+      "computedHash": "f8b3465bf7e375ddeb54886836acae185e8544d0a5a90d33b5587eef7773bc24"
+    },
+    "pipeline-review": {
+      "source": "NotHarshhaa/devops-skills",
+      "sourceType": "github",
+      "skillPath": "pipeline-review/SKILL.md",
+      "computedHash": "a0ab01e3d85f74a01b5e1fff3b55dd06440cff1eee2505ca79ac8ca2edaffee8"
+    },
     "recall": {
       "source": "rohitg00/agentmemory",
       "sourceType": "github",
@@ -103,11 +163,29 @@
       "skillPath": "plugin/skills/recap/SKILL.md",
       "computedHash": "8c48af4454651cd50493d497186afce75abbaca7483f9ccb368bc893da8f9549"
     },
+    "release-readiness": {
+      "source": "NotHarshhaa/devops-skills",
+      "sourceType": "github",
+      "skillPath": "release-readiness/SKILL.md",
+      "computedHash": "c592fd244c2d6065b566f91bcfc57e237dbe12927038b95a54a201a263a90899"
+    },
     "remember": {
       "source": "rohitg00/agentmemory",
       "sourceType": "github",
       "skillPath": "plugin/skills/remember/SKILL.md",
       "computedHash": "367f8b564b58b93a02c7c4d99cfce917182b2fe44f6e8096928de25200aa745d"
+    },
+    "runbook": {
+      "source": "NotHarshhaa/devops-skills",
+      "sourceType": "github",
+      "skillPath": "runbook/SKILL.md",
+      "computedHash": "532d8ff2aaab4bcf039cd1a70a5bf35e2dbd3abd60c09fa2d907bcf0ff95f41a"
+    },
+    "security-review": {
+      "source": "NotHarshhaa/devops-skills",
+      "sourceType": "github",
+      "skillPath": "security-review/SKILL.md",
+      "computedHash": "33e0add37ac265a5d645fece3934afe37f755e153d0727f63257362d30383e1d"
     },
     "seo-audit": {
       "source": "every-app/open-seo",
@@ -126,6 +204,18 @@
       "sourceType": "github",
       "skillPath": "skills/technical-seo-triage/SKILL.md",
       "computedHash": "1a585c49678bf9b87d5ea9d991d2fadfcf4f97749291af4b0464dde4077ef45e"
+    },
+    "terraform-review": {
+      "source": "NotHarshhaa/devops-skills",
+      "sourceType": "github",
+      "skillPath": "terraform-review/SKILL.md",
+      "computedHash": "2537aacee05dd3f14f084abaeafc2c76f16bbc82328bebe3452f0c5b89c3d7b9"
+    },
+    "upgrade-review": {
+      "source": "NotHarshhaa/devops-skills",
+      "sourceType": "github",
+      "skillPath": "upgrade-review/SKILL.md",
+      "computedHash": "5941b020aa073fe7e1f3f231d7806fee6d93914437ece3aa48b756f1dc1a817b"
     },
     "vercel-react-best-practices": {
       "source": "vercel-labs/agent-skills",

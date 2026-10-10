@@ -40,6 +40,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from os_tools import DESTRUCTIVE_OS_TOOLS, execute_os_tool
+from observability import install_metrics
 
 # ML Model Inference
 try:
@@ -64,6 +65,11 @@ except ImportError:
 
 load_dotenv()  # Load API keys from .env
 
+
+def _allowed_origins() -> list[str]:
+    raw = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:3001")
+    return [origin.strip() for origin in raw.split(",") if origin.strip()]
+
 app = FastAPI(
     title="Hive Bridge API",
     description="Multi-Agent Harness for PrismSpace – powered by aden-hive/hive",
@@ -72,11 +78,12 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001"],
+    allow_origins=_allowed_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+install_metrics(app)
 
 # ---------------------------------------------------------------------------
 # In-memory store (replace with Hive's persistent storage in production)

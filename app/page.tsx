@@ -5,6 +5,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { usePostHog } from '@posthog/react';
 import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'motion/react';
 import Loader from '@/components/kokonutui/loader';
@@ -26,6 +27,7 @@ const PanelManager = dynamic(
 );
 
 export default function Home() {
+  const posthog = usePostHog();
   const [isLoading, setIsLoading] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
   const { activePanel, openPanel, closePanel } = usePanelManager();
@@ -46,6 +48,8 @@ export default function Home() {
   }, [openPanel]);
 
   const handleToolAction = (action: string) => {
+    posthog.capture('tool_opened', { tool: action });
+
     // Handle system stats specially
     if (action === 'system-stats') {
       const ramInfo = document.getElementById('ram-usage')?.textContent || 'N/A';
