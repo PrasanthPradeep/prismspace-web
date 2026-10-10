@@ -7,12 +7,21 @@
  * Proxies the health check from the Python Agent Swarm backend.
  */
 import { NextResponse } from 'next/server';
+import { SeverityNumber } from '@opentelemetry/api-logs';
 
 export const dynamic = 'force-dynamic';
 
 const SWARM_URL = process.env.HIVE_API_URL ?? 'http://localhost:7433';
 
 export async function GET() {
+  const logger = (globalThis as any).__posthogLogger;
+  logger?.emit({
+    severityNumber: SeverityNumber.INFO,
+    severityText: 'INFO',
+    body: 'Agent Swarm health route called',
+    attributes: { route: '/api/agent-swarm/health' },
+  });
+
   try {
     const res = await fetch(`${SWARM_URL}/health`, {
       cache: 'no-store',

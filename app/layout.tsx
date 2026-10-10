@@ -7,7 +7,7 @@ import "./globals.css";
 import { cn } from "@/lib/utils";
 import { BackgroundManager } from "@/components/BackgroundManager";
 import { DynamicIsland } from "@/components/DynamicIsland";
-import { PostHogProvider } from "@/components/PostHogProvider";
+import { PostHogProvider } from "./providers";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/site-config";
 
 export const metadata: Metadata = {

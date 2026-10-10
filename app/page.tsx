@@ -5,6 +5,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { usePostHog } from '@posthog/react';
 import dynamic from 'next/dynamic';
 import { motion, AnimatePresence } from 'motion/react';
 import Loader from '@/components/kokonutui/loader';
@@ -14,7 +15,6 @@ import { TopLogo } from '@/components/TopLogo';
 import { TopQuote } from '@/components/TopQuote';
 import { QuickActions } from '@/components/QuickActions';
 import { usePanelManager } from '@/components/use-panel-manager';
-import { capturePrismEvent } from '@/lib/posthog-client';
 
 const SettingsModal = dynamic(
   () => import('@/components/SettingsModal').then((module) => module.SettingsModal),
@@ -27,6 +27,7 @@ const PanelManager = dynamic(
 );
 
 export default function Home() {
+  const posthog = usePostHog();
   const [isLoading, setIsLoading] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
   const { activePanel, openPanel, closePanel } = usePanelManager();
@@ -47,7 +48,7 @@ export default function Home() {
   }, [openPanel]);
 
   const handleToolAction = (action: string) => {
-    capturePrismEvent('tool_opened', { tool: action });
+    posthog.capture('tool_opened', { tool: action });
 
     // Handle system stats specially
     if (action === 'system-stats') {
