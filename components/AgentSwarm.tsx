@@ -279,6 +279,15 @@ function getProviderForModel(modelId: string): ModelProvider {
 const SWARM_MODEL_KEY = 'prism.agentSwarm.selectedModel';
 const ACTIVE_SWARM_CHAT_KEY = 'prism.agentSwarm.activeChatId';
 
+const LOCAL_SWARM_MODEL_LABELS: Record<string, string> = {
+  llama3: 'Llama 3',
+  'llama3.1': 'Llama 3.1',
+  mistral: 'Mistral',
+  'qwen2.5': 'Qwen 2.5',
+  gemma2: 'Gemma 2',
+  phi3: 'Phi-3',
+};
+
 function createChatId() {
   return `swarm-chat-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
@@ -467,7 +476,22 @@ export function AgentSwarm({ onClose }: AgentSwarmProps) {
   }, []);
 
   const availablePromptModels = useMemo(() => {
-    return getAllPromptModels(storedKeys);
+    const byokModels: AIPromptModel[] = getAllPromptModels(storedKeys);
+    const localModels: AIPromptModel[] = MODELS.ollama.map((modelId) => ({
+      id: modelId,
+      name: LOCAL_SWARM_MODEL_LABELS[modelId] || modelId,
+      provider: 'ollama',
+      badge: 'Local',
+    }));
+    const seen = new Set(byokModels.map((m) => m.id));
+    const merged = [...byokModels];
+    for (const local of localModels) {
+      if (!seen.has(local.id)) {
+        seen.add(local.id);
+        merged.push(local);
+      }
+    }
+    return merged;
   }, [storedKeys]);
 
   const configuredProviderCount = useMemo(() => {
