@@ -269,6 +269,7 @@ const MODELS: Record<ModelProvider, string[]> = {
     'qwen/qwen-2.5-72b-instruct',
   ],
   deepseek: ['deepseek-chat', 'deepseek-reasoner'],
+  ollama: ['llama3', 'llama3.1', 'mistral', 'qwen2.5', 'gemma2', 'phi3'],
 };
 
 function getProviderForModel(modelId: string): ModelProvider {
@@ -2896,7 +2897,7 @@ export function AgentSwarm({ onClose }: AgentSwarmProps) {
       <ByokModal
         isOpen={showByokModal}
         onClose={() => setShowByokModal(false)}
-        initialProvider={getProviderForModel(model)}
+        initialProvider={getProviderForModel(model) === 'ollama' ? undefined : (getProviderForModel(model) as ByokProviderId | undefined)}
       />
     </div>
   );

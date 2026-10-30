@@ -26,7 +26,8 @@ export type ModelProvider =
   | 'anthropic'
   | 'google'
   | 'openrouter'
-  | 'deepseek';
+  | 'deepseek'
+  | 'ollama';
 
 export interface SwarmAgent {
   id: string;

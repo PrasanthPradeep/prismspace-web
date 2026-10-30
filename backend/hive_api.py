@@ -624,6 +624,49 @@ def _normalise_chat_history(chat_history: list[ChatContextMessage]) -> list[dict
     return messages
 
 
+async def _call_ollama(
+    model: str, 
+    objective: str, 
+    chat_history: list[ChatContextMessage] | list[dict[str, str]],
+    api_key: Optional[str] = None
+) -> str:
+    """Call a LOCAL Ollama server (OpenAI-compatible /v1 endpoint) for local models.
+
+    Runs against http://localhost:11434 by default (OLLAMA_BASE_URL env override),
+    so swarm runs can execute entirely on local hardware via Ollama.
+    """
+    from openai import AsyncOpenAI
+    client = AsyncOpenAI(
+        base_url=os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434/v1"),
+        api_key=api_key or "ollama",
+    )
+    ollama_model = str(model or "llama3").removeprefix("ollama/").removeprefix("ollama_chat/")
+    if chat_history and isinstance(chat_history[0], dict):
+        messages = chat_history
+    else:
+        messages = _normalise_chat_history(chat_history)
+    final_messages = [{"role": "system", "content": _build_system_prompt()}]
+    final_messages.extend(messages)
+    if objective:
+        final_messages.append({"role": "user", "content": objective})
+    chunks: list[str] = []
+    stream = await client.chat.completions.create(
+        model=ollama_model,
+        messages=final_messages,
+        temperature=0.7,
+        max_tokens=8192,
+        stream=True,
+    )
+    async for chunk in stream:
+        if not chunk.choices:
+            continue
+        delta = chunk.choices[0].delta
+        if getattr(delta, "content", None) is not None:
+            chunks.append(delta.content)
+    result = "".join(chunks)
+    return result if result.strip() else "(No response generated)"
+
+
 async def _call_groq(
     model: str, 
     objective: str, 
@@ -2050,6 +2093,8 @@ async def _tool_use_loop(
                         current_response = await _call_openrouter(request.model, "", conversation_history, api_key=request.api_key)
                     elif provider == "deepseek":
                         current_response = await _call_deepseek(request.model, "", conversation_history, api_key=request.api_key)
+                    elif provider == "ollama":
+                        current_response = await _call_ollama(request.model, "", conversation_history, api_key=request.api_key)
                     else:
                         _log(agent_id, f"⚠️ Unknown provider: {provider}, giving up")
                         return current_response
@@ -2164,6 +2209,8 @@ async def _tool_use_loop(
                 current_response = await _call_openrouter(request.model, "", conversation_history, api_key=request.api_key)
             elif provider == "deepseek":
                 current_response = await _call_deepseek(request.model, "", conversation_history, api_key=request.api_key)
+            elif provider == "ollama":
+                current_response = await _call_ollama(request.model, "", conversation_history, api_key=request.api_key)
             else:
                 _log(agent_id, f"⚠️ Unknown provider: {provider}, breaking loop")
                 return current_response
@@ -2258,6 +2305,8 @@ async def _run_hive_agent(agent_id: str, request: CreateAgentRequest) -> None:
             result_text = await _call_openrouter(request.model, request.objective, request.chat_history, api_key=request.api_key)
         elif provider == "deepseek":
             result_text = await _call_deepseek(request.model, request.objective, request.chat_history, api_key=request.api_key)
+        elif provider == "ollama":
+            result_text = await _call_ollama(request.model, request.objective, request.chat_history, api_key=request.api_key)
         else:
             raise ValueError(f"Unsupported provider: {request.provider}")
 
